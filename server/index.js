@@ -48,6 +48,9 @@ wss.on('connection', (ws) => {
 
       if (data.type === 'PLAY_CARD') {
         stateChanged = room.playCard(playerId, data.payload);
+      } else if (data.type === 'WAKE_UP') {
+        // 玩家狂点满 12 次后发送的惊醒请求
+        stateChanged = room.wakeUp(playerId);
       } else if (data.type === 'END_TURN') {
         stateChanged = room.endTurn(playerId);
       }

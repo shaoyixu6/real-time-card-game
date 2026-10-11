@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <title>卡牌游戏测试客户端</title>
   <style>
-    body { font-family: sans-serif; padding: 20px; background: #222; color: #fff; margin: 0; overflow-x: hidden; }
+    body { font-family: sans-serif; padding: 20px; background: #222; color: #fff; margin: 0; overflow-x: hidden; user-select: none; }
     button { padding: 8px 16px; margin-right: 10px; font-size: 14px; cursor: pointer; border-radius: 4px; border: none; }
     .btn-connect { background: #2196F3; color: white; }
     .btn-end { background: #FF9800; color: white; font-weight: bold; }
@@ -16,7 +16,7 @@
       background: linear-gradient(180deg, rgba(0, 105, 180, 0.35) 0%, rgba(0, 40, 90, 0.75) 100%);
       box-shadow: inset 0 0 100px #00e5ff;
       z-index: 999;
-      pointer-events: none;
+      pointer-events: none; /* 水幕允许鼠标穿透点击底下的牌 */
       flex-direction: column; justify-content: center; align-items: center;
       animation: wavePulse 0.6s infinite alternate ease-in-out;
     }
@@ -35,6 +35,38 @@
       background: rgba(0, 0, 0, 0.5); padding: 8px 24px; border-radius: 20px;
     }
 
+    /* 💤 全屏沉睡梦魇特效层（pointer-events: auto 彻底锁死底层，必须先点按钮醒来！） */
+    #sleep-overlay {
+      display: none;
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: radial-gradient(circle, rgba(60, 0, 110, 0.88) 0%, rgba(10, 0, 25, 0.96) 100%);
+      box-shadow: inset 0 0 120px #aa00ff;
+      z-index: 1000; /* 比大水层级更高，优先阻挡屏幕 */
+      pointer-events: auto;
+      flex-direction: column; justify-content: center; align-items: center;
+    }
+    #sleep-zzz {
+      font-size: 90px; font-weight: 900; color: #e040fb;
+      text-shadow: 0 0 25px #aa00ff, 0 0 50px #000;
+      margin-bottom: 10px;
+    }
+    #sleep-timer-text {
+      font-size: 26px; color: #ffb74d; font-weight: bold; margin-bottom: 25px;
+      text-shadow: 0 0 10px #000;
+    }
+    #btn-struggle {
+      background: linear-gradient(135deg, #aa00ff, #ff007f);
+      color: #fff; font-size: 28px; font-weight: 900;
+      padding: 22px 45px; border-radius: 50px;
+      border: 4px solid #fff;
+      box-shadow: 0 0 30px #e040fb, 0 8px 0 #4a0072;
+      cursor: pointer; transition: transform 0.05s;
+    }
+    #btn-struggle:active {
+      transform: scale(0.92) translateY(4px);
+      box-shadow: 0 0 45px #ff4081, 0 2px 0 #4a0072;
+    }
+
     #hand-area { margin-top: 20px; padding: 15px; background: #333; border-radius: 8px; min-height: 80px; }
     .card-btn { 
       background: #4CAF50; color: white; padding: 12px 16px; margin: 5px; 
@@ -48,6 +80,10 @@
     .card-btn.flood-card {
       background: #003366; color: #00e5ff; border: 2px solid #00e5ff;
       box-shadow: 0 0 8px rgba(0, 229, 255, 0.5);
+    }
+    .card-btn.sleep-card {
+      background: #311b92; color: #ea80fc; border: 2px solid #ea80fc;
+      box-shadow: 0 0 12px rgba(234, 128, 252, 0.7);
     }
     .card-btn:hover { transform: translateY(-5px); }
 
@@ -77,13 +113,24 @@
     .msg { color: #4CAF50; }
     .err { color: #f44336; }
     .flood-msg { color: #00e5ff; font-weight: bold; }
+    .sleep-msg { color: #ea80fc; font-weight: bold; }
   </style>
 </head>
 <body>
-  <!-- 🌊 全屏被水淹没特效 + 中央大字倒计时 -->
+  <!-- 🌊 全屏被水淹没特效 -->
   <div id="water-overlay">
     <div id="big-countdown">6</div>
     <div id="water-warning-text">🌊 正在被大水淹没！快出牌！！ 🌊</div>
+  </div>
+
+  <!-- 💤 全屏大睡挣扎特效（狂按 12 次惊醒） -->
+  <div id="sleep-overlay">
+    <div id="sleep-zzz">💤 陷入沉睡 Zzz...</div>
+    <div id="sleep-timer-text">⚠️ 距离彻底睡死跳过回合还剩：<span id="sleep-countdown">2.5</span> 秒！</div>
+    <button id="btn-struggle" onclick="handleStruggleClick()">
+      💥 狂按咬舌尖惊醒！(<span id="struggle-count">0</span> / 12) 💥
+    </button>
+    <div style="margin-top: 15px; color: #ccc; font-size: 15px;">（注：强行挣脱催眠将受到 8 点反噬伤害，不按则直接跳过本回合！）</div>
   </div>
 
   <h1>2D 卡牌游戏 - 玩家客户端</h1>
@@ -121,6 +168,9 @@
     let pendingCardId = null;
 
     let floodIntervalId = null;
+    let sleepIntervalId = null;
+    let struggleClicks = 0;
+    const REQUIRED_STRUGGLE_CLICKS = 12;
 
     const logDiv = document.getElementById('log');
     const cardsContainer = document.getElementById('cards-container');
@@ -128,6 +178,9 @@
     const qtePointer = document.getElementById('qte-pointer');
     const waterOverlay = document.getElementById('water-overlay');
     const bigCountdown = document.getElementById('big-countdown');
+    const sleepOverlay = document.getElementById('sleep-overlay');
+    const sleepCountdownSpan = document.getElementById('sleep-countdown');
+    const struggleCountSpan = document.getElementById('struggle-count');
 
     function log(msg, className = '') {
       logDiv.innerHTML += `<div class="${className}">[${new Date().toLocaleTimeString()}] ${msg}</div>`;
@@ -160,8 +213,16 @@
             if (qteAnimationId) cancelAnimationFrame(qteAnimationId);
           }
 
+          // 如果已经不是沉睡状态（比如惊醒成功或回合跳过），关闭沉睡遮罩
+          if (!state.isCurrentPlayerSleeping || !currentIsMyTurn) {
+            stopSleepUI();
+          }
+
           if (isNewTurn) {
             startFloodCountdownUI(state.turnTimeLimit, currentIsMyTurn);
+            if (state.isCurrentPlayerSleeping) {
+              startSleepStruggleUI(currentIsMyTurn);
+            }
           }
           
           log(`🔄 === 第 ${state.turn} 回合 (${currentIsMyTurn ? '🟢 你的回合!' : '🔴 对手回合'}) ===`, 'msg');
@@ -169,9 +230,9 @@
           state.players.forEach(p => {
             const isMe = p.id === myPlayerId ? "【我】" : "【对手】";
             const isDead = p.hp === 0 ? " (💀 已阵亡)" : "";
-            const floodTag = p.nextTurnFlooded ? ` [🌊下回合将被水淹${p.nextTurnFlooded}秒!]` : "";
-            // 已彻底移除“牌库”显示！
-            log(`   👤 ${isMe} ${p.name}: HP ${p.hp} | 💎 Mana ${p.mana}/${p.maxMana}${floodTag}${isDead}`);
+            const floodTag = p.nextTurnFlooded ? ` [🌊下回合水淹${p.nextTurnFlooded}秒!]` : "";
+            const sleepTag = p.nextTurnSleep ? ` [💤下回合陷入大睡!]` : "";
+            log(`   👤 ${isMe} ${p.name}: HP ${p.hp} | 💎 Mana ${p.mana}/${p.maxMana}${floodTag}${sleepTag}${isDead}`);
             
             if (p.id === myPlayerId) {
               currentMyMana = p.mana;
@@ -182,6 +243,7 @@
           if (state.state === 'ENDED') {
             clearInterval(floodIntervalId);
             waterOverlay.style.display = 'none';
+            stopSleepUI();
             log(`🏆 游戏结束！`, 'err');
             cardsContainer.innerHTML = '游戏已结束';
             qteModal.style.display = 'none';
@@ -191,6 +253,52 @@
       
       ws.onerror = () => log('❌ 连接失败，请确认终端里的 node index.js 正在运行！', 'err');
       ws.onclose = () => log('🔌 连接已断开');
+    }
+
+    // 💤 启动【大睡】2.5秒狂点挣扎 UI
+    function startSleepStruggleUI(isMyTurn) {
+      stopSleepUI();
+      if (isMyTurn) {
+        struggleClicks = 0;
+        struggleCountSpan.innerText = struggleClicks;
+        sleepOverlay.style.display = 'flex';
+        let remaining = 2.5;
+        sleepCountdownSpan.innerText = remaining.toFixed(1);
+        log('💤 糟糕！你中了【大睡】！快在 2.5 秒内狂点 12 次按钮挣脱沉睡！', 'sleep-msg');
+
+        sleepIntervalId = setInterval(() => {
+          remaining -= 0.1;
+          if (remaining <= 0) {
+            remaining = 0;
+            stopSleepUI();
+          }
+          sleepCountdownSpan.innerText = remaining.toFixed(1);
+        }, 100);
+      } else {
+        log('💤 对手陷入了你的【大睡】梦魇！正在拼命挣扎中（2.5秒判定）...', 'sleep-msg');
+      }
+    }
+
+    function stopSleepUI() {
+      if (sleepIntervalId) {
+        clearInterval(sleepIntervalId);
+        sleepIntervalId = null;
+      }
+      sleepOverlay.style.display = 'none';
+    }
+
+    // 玩家每次点击挣扎按钮
+    function handleStruggleClick() {
+      struggleClicks++;
+      struggleCountSpan.innerText = struggleClicks;
+
+      if (struggleClicks >= REQUIRED_STRUGGLE_CLICKS) {
+        stopSleepUI();
+        log('🩸 你疯狂咬破舌尖（-8 HP），强行从【大睡】中惊醒了过来！快出牌！', 'sleep-msg');
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'WAKE_UP' }));
+        }
+      }
     }
 
     function startFloodCountdownUI(timeLimitSeconds, isMyTurn) {
@@ -234,6 +342,9 @@
         } else if (card.effect.type === 'FLOOD') {
           btn.className = 'card-btn flood-card';
           btn.innerText = `${card.name} [💎${card.cost}费 | 🌊淹${card.effect.value}秒]`;
+        } else if (card.effect.type === 'SLEEP') {
+          btn.className = 'card-btn sleep-card';
+          btn.innerText = `${card.name} [💎${card.cost}费 | 💤跳回合/反噬${card.effect.value}]`;
         } else {
           btn.className = 'card-btn';
           btn.innerText = `${card.name} [💎${card.cost}费 | 💥伤${card.effect.value}]`;
@@ -263,6 +374,8 @@
       } else {
         if (card.effect.type === 'FLOOD') {
           log(`🌊 你发动了【大水】！对手下回合将被水淹没 ${card.effect.value} 秒！`, 'flood-msg');
+        } else if (card.effect.type === 'SLEEP') {
+          log(`💤 你发动了传说控制卡【大睡】！对手下回合将陷入沉睡梦魇！`, 'sleep-msg');
         }
         sendPlayCard(card.id);
       }
@@ -319,6 +432,7 @@
       if (ws && ws.readyState === WebSocket.OPEN) {
         qteModal.style.display = 'none';
         waterOverlay.style.display = 'none';
+        stopSleepUI();
         clearInterval(floodIntervalId);
         if (qteAnimationId) cancelAnimationFrame(qteAnimationId);
         ws.send(JSON.stringify({ type: 'END_TURN' }));

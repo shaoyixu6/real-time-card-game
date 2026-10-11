@@ -8,8 +8,10 @@ class Room {
     this.state = 'WAITING';
     this.turn = 1;
     this.currentTurnPlayerId = null;
-    this.turnTimer = null;
+    this.turnTimer = null;        // 🌊 大水定时器
+    this.sleepTimer = null;       // 💤 大睡 2.5秒挣扎定时器
     this.currentTurnTimeLimit = null;
+    this.isCurrentPlayerSleeping = false; // 当前回合玩家是否正在沉睡挣扎中
   }
 
   addPlayer(player) {
@@ -22,19 +24,24 @@ class Room {
   }
 
   removePlayer(playerId) {
-    this.clearTurnTimer();
+    this.clearAllTimers();
     this.players = this.players.filter(p => p.id !== playerId);
     this.state = 'WAITING';
     this.turn = 1;
     this.currentTurnPlayerId = null;
     this.currentTurnTimeLimit = null;
+    this.isCurrentPlayerSleeping = false;
     console.log(`[Room ${this.roomId}] 玩家 ${playerId} 离开，房间已腾出座位`);
   }
 
-  clearTurnTimer() {
+  clearAllTimers() {
     if (this.turnTimer) {
       clearTimeout(this.turnTimer);
       this.turnTimer = null;
+    }
+    if (this.sleepTimer) {
+      clearTimeout(this.sleepTimer);
+      this.sleepTimer = null;
     }
   }
 
@@ -52,7 +59,8 @@ class Room {
   }
 
   playCard(playerId, payload) {
-    if (this.state !== 'PLAYING' || this.currentTurnPlayerId !== playerId) {
+    // 如果还没醒来（正在沉睡挣扎），严禁出牌！
+    if (this.state !== 'PLAYING' || this.currentTurnPlayerId !== playerId || this.isCurrentPlayerSleeping) {
       return false;
     }
 
@@ -91,12 +99,46 @@ class Room {
       defender.nextTurnTimeLimit = card.effect.value;
       console.log(`🌊[大水漫灌!] ${attacker.name} 打出【${card.name}】！${defender.name} 下回合出牌时间被限制为 ${card.effect.value} 秒！`);
     }
+    // 👇 新增：【💤大睡】效果结算
+    else if (card.effect.type === 'SLEEP') {
+      defender.nextTurnSleep = true;
+      console.log(`💤[催眠降临!] ${attacker.name} 打出【${card.name}】！${defender.name} 下回合将陷入沉睡！`);
+    }
 
     if (defender.hp === 0) {
-      this.clearTurnTimer();
+      this.clearAllTimers();
       this.state = 'ENDED';
       console.log(`[Game Over] ${attacker.name} 获胜！`);
       return true;
+    }
+
+    return true;
+  }
+
+  // 👇 新增：处理玩家狂按 12 次挣脱【大睡】的请求
+  wakeUp(playerId) {
+    if (this.state !== 'PLAYING' || this.currentTurnPlayerId !== playerId || !this.isCurrentPlayerSleeping) {
+      return false;
+    }
+
+    // 取消 2.5 秒强制睡死定时器
+    if (this.sleepTimer) {
+      clearTimeout(this.sleepTimer);
+      this.sleepTimer = null;
+    }
+
+    this.isCurrentPlayerSleeping = false;
+    const player = this.players.find(p => p.id === playerId);
+    const opponent = this.players.find(p => p.id !== playerId);
+
+    // 咬舌尖强行惊醒：受到 8 点精神反噬伤害！
+    player.takeDamage(8);
+    console.log(`🩸[强行惊醒!] ${player.name} 狂按12次咬破舌尖挣脱了【大睡】！受到 8 点反噬伤害，保住了回合！`);
+
+    if (player.hp === 0) {
+      this.clearAllTimers();
+      this.state = 'ENDED';
+      console.log(`[Game Over] ${player.name} 因强行挣脱催眠力竭倒下，${opponent.name} 获胜！`);
     }
 
     return true;
@@ -107,7 +149,8 @@ class Room {
       return false;
     }
 
-    this.clearTurnTimer();
+    this.clearAllTimers();
+    this.isCurrentPlayerSleeping = false;
 
     const nextPlayer = this.players.find(p => p.id !== playerId);
 
@@ -116,6 +159,22 @@ class Room {
     nextPlayer.refreshMana();
     nextPlayer.drawCard(1);
 
+    // 1. 检查是否中了【💤大睡】（5秒内必须狂点25次挣脱）
+    if (nextPlayer.nextTurnSleep) {
+      nextPlayer.nextTurnSleep = false;
+      this.isCurrentPlayerSleeping = true;
+      console.log(`💤 [沉睡判定开始] ${nextPlayer.name} 陷入沉睡！必须在 5 秒内狂按 25 次惊醒！`);
+
+      this.sleepTimer = setTimeout(() => {
+        console.log(`💤 [彻底睡死!] ${nextPlayer.name} 未能挣脱【大睡】，回合被直接跳过！`);
+        this.endTurn(nextPlayer.id);
+        if (this.onStateChange) {
+          this.onStateChange();
+        }
+      }, 5000); // 👈 这里从 2500 改成 5000（5秒）！
+    }
+
+    // 2. 检查是否中了【🌊大水】（6秒限时）
     if (nextPlayer.nextTurnTimeLimit) {
       const limitSeconds = nextPlayer.nextTurnTimeLimit;
       this.currentTurnTimeLimit = limitSeconds;
@@ -132,7 +191,9 @@ class Room {
       }, limitSeconds * 1000);
     } else {
       this.currentTurnTimeLimit = null;
-      console.log(`[Turn] 回合结束！进入第 ${this.turn} 回合，轮到 ${nextPlayer.name} 行动`);
+      if (!this.isCurrentPlayerSleeping) {
+        console.log(`[Turn] 回合结束！进入第 ${this.turn} 回合，轮到 ${nextPlayer.name} 行动`);
+      }
     }
 
     return true;
@@ -145,13 +206,15 @@ class Room {
       turn: this.turn,
       currentTurnPlayerId: this.currentTurnPlayerId,
       turnTimeLimit: this.currentTurnTimeLimit,
+      isCurrentPlayerSleeping: this.isCurrentPlayerSleeping, // 告诉前端当前玩家是否正在沉睡挣扎
       players: this.players.map((p) => ({
         id: p.id,
         name: p.name,
         hp: p.hp,
         mana: p.mana,
         maxMana: p.maxMana,
-        nextTurnFlooded: p.nextTurnTimeLimit, // 直接传递秒数（如 6），没有则为 null
+        nextTurnFlooded: p.nextTurnTimeLimit,
+        nextTurnSleep: p.nextTurnSleep, // 预告下回合是否中了大睡
         hand: p.hand
       })),
     };
