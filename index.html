@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>卡牌游戏测试客户端</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; background: #222; color: #fff; }
+    #log { margin-top: 20px; padding: 10px; background: #111; height: 300px; overflow-y: auto; }
+    .msg { color: #4CAF50; }
+    .err { color: #f44336; }
+  </style>
+</head>
+<body>
+  <h1>2D 卡牌游戏 - 玩家客户端</h1>
+  <button onclick="connectServer()">点击连接服务器</button>
+  <button onclick="sendTest()">发一条消息</button>
+  <div id="log">等待连接...</div>
+
+  <script>
+    let ws;
+    const logDiv = document.getElementById('log');
+
+    function log(msg, className = '') {
+      logDiv.innerHTML += `<div class="${className}">[${new Date().toLocaleTimeString()}] ${msg}</div>`;
+    }
+
+    function connectServer() {
+      ws = new WebSocket('ws://localhost:8080');
+      
+      ws.onopen = () => log('✅ 成功连上服务器！', 'msg');
+      
+      ws.onmessage = (e) => {
+        const data = JSON.parse(e.data);
+        log(`📩 收到系统消息: ${data.message}`, 'msg');
+      };
+      
+      ws.onerror = (e) => log('❌ 连接失败，请确认终端里的 node index.js 正在运行！', 'err');
+      
+      ws.onclose = () => log('🔌 连接已断开');
+    }
+
+    function sendTest() {
+      if(ws && ws.readyState === WebSocket.OPEN) {
+        ws.send("你好，我准备出牌了！");
+        log('我: 你好，我准备出牌了！');
+      } else {
+        log('还没连上呢，先点连接！', 'err');
+      }
+    }
+  </script>
+</body>
+</html>
