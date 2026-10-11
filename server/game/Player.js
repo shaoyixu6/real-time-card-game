@@ -1,21 +1,37 @@
 // server/game/Player.js
+const Card = require('./Card');
 
 class Player {
-  /**
-   * @param {string} id - 玩家唯一标识（由 WebSocket 连接分配）
-   * @param {string} name - 玩家昵称
-   */
   constructor(id, name) {
     this.id = id;
     this.name = name;
-    this.hp = 100;              // 初始生命值
-    this.mana = 10;             // 当前可用费用
-    this.maxMana = 4;          // 本回合费用上限
-    this.hand = [];            // 手牌数组（存放 Card 实例）
-    this.deck = [];            // 牌库数组（存放 Card 实例）
+    this.hp = 100;
+    this.mana = 0;
+    this.maxMana = 0;
+    this.hand = [];
+    this.deck = [];
+    
+    // 创建玩家时自动初始化牌库
+    this.initDeck();
   }
 
-  // 承受伤害的基础方法
+  initDeck() {
+    for (let i = 1; i <= 5; i++) {
+      this.deck.push(new Card(`fireball_${i}`, '小火球', 1, { type: 'DAMAGE', value: 5 }));
+      this.deck.push(new Card(`strike_${i}`, '重击', 2, { type: 'DAMAGE', value: 12 }));
+    }
+    this.deck.sort(() => Math.random() - 0.5);
+  }
+
+  drawCard(count = 1) {
+    for (let i = 0; i < count; i++) {
+      if (this.deck.length > 0 && this.hand.length < 10) {
+        const card = this.deck.pop();
+        this.hand.push(card);
+      }
+    }
+  }
+
   takeDamage(amount) {
     this.hp -= amount;
     if (this.hp < 0) {
@@ -23,9 +39,8 @@ class Player {
     }
   }
 
-  // 回合开始时增加费用上限并回满
   refreshMana(turnCount) {
-    this.maxMana = Math.min(turnCount, 10); // 假设最高 10 费
+    this.maxMana = Math.min(turnCount, 10);
     this.mana = this.maxMana;
   }
 }

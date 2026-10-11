@@ -1,25 +1,20 @@
 // server/game/Room.js
 
 class Room {
-  /**
-   * @param {string} roomId - 房间唯一ID
-   */
   constructor(roomId) {
     this.roomId = roomId;
-    this.players = [];         // 存放最多 2 个 Player 实例
-    this.state = 'WAITING';    // 状态机：WAITING(等待玩家), PLAYING(对局中), ENDED(已结束)
-    this.turn = 1;             // 当前第几回合
-    this.currentTurnPlayerId = null; // 当前正在行动的玩家 ID
+    this.players = [];
+    this.state = 'WAITING';
+    this.turn = 1;
+    this.currentTurnPlayerId = null;
   }
 
   // 玩家加入逻辑
   addPlayer(player) {
-    if (this.players.length >= 2) {
-      return false; // 房间已满
-    }
-
+    if (this.players.length >= 2) return false;
+    
     this.players.push(player);
-
+    
     // 满两人自动开局
     if (this.players.length === 2) {
       this.startGame();
@@ -27,52 +22,99 @@ class Room {
     return true;
   }
 
-  // 开始对局
-  startGame() {
-    this.state = 'PLAYING';
-    // 默认让第一个进入房间的玩家先手
-    this.currentTurnPlayerId = this.players[0].id;
-    console.log(`[Room ${this.roomId}] Game started between ${this.players[0].name} and ${this.players[1].name}`);
+  // 玩家掉线/刷新网页时，将其移出房间并重置对局（彻底解决 Room is full）
+  removePlayer(playerId) {
+    this.players = this.players.filter(p => p.id !== playerId);
+    this.state = 'WAITING';
+    this.turn = 1;
+    this.currentTurnPlayerId = null;
+    console.log(`[Room ${this.roomId}] 玩家 ${playerId} 离开，房间已腾出座位 (当前人数: ${this.players.length})`);
   }
 
-  // 处理出牌逻辑
+  // 开始对局：初始抽牌与费用初始化
+  startGame() {
+    this.state = 'PLAYING';
+    this.currentTurnPlayerId = this.players[0].id;
+
+    // 双方开局先各抽 3 张牌
+    this.players[0].drawCard(3);
+    this.players[1].drawCard(3);
+
+    // 先手玩家获得第 1 回合的法力值（1费）并抽第 1 回合的 1 张牌
+    this.players[0].refreshMana(this.turn);
+    this.players[0].drawCard(1);
+
+    console.log(`[Room ${this.roomId}] 游戏开始！先手: ${this.players[0].name}`);
+  }
+
+  // 处理真实出牌逻辑（只要费用够，一回合可以出多张牌）
   playCard(playerId, payload) {
-    // 1. 校验：游戏是否在进行？是否轮到该玩家出牌？
-    if (this.state !== 'PLAYING') {
-      console.log('游戏未开始或已结束');
-      return false; 
-    }
-    if (this.currentTurnPlayerId !== playerId) {
-      console.log('还没轮到你出牌！');
+    if (this.state !== 'PLAYING' || this.currentTurnPlayerId !== playerId) {
+      console.log('未轮到该玩家或游戏未开始');
       return false;
     }
 
-    // 2. 找到攻击者和防御者
     const attacker = this.players.find(p => p.id === playerId);
     const defender = this.players.find(p => p.id !== playerId);
 
-    // 3. 执行扣血（为了测试，先写死造成 10 点伤害）
-    // 以后这里可以改成根据 payload.cardId 去实例化的卡牌字典里取伤害值
-    const damage = 10;
-    defender.takeDamage(damage);
-    
-    console.log(`[Action] ${attacker.name} 打出卡牌，造成 ${damage} 伤害！${defender.name} 剩余 HP: ${defender.hp}`);
+    // 1. 在攻击者的手牌中查找点击的那张牌
+    const cardIndex = payload && payload.cardId 
+      ? attacker.hand.findIndex(c => c.id === payload.cardId) 
+      : 0;
 
-    // 4. 检查是否击杀结束游戏
+    if (cardIndex === -1 || attacker.hand.length === 0) {
+      console.log('手牌中没有这张牌！');
+      return false;
+    }
+
+    const card = attacker.hand[cardIndex];
+
+    // 2. 校验法力值（Mana）是否足够
+    if (attacker.mana < card.cost) {
+      console.log(`法力值不足！需要 ${card.cost} 费，当前只有 ${attacker.mana} 费`);
+      return false;
+    }
+
+    // 3. 扣除费用，并将卡牌从手牌数组中移除
+    attacker.mana -= card.cost;
+    attacker.hand.splice(cardIndex, 1);
+
+    // 4. 根据卡牌效果结算伤害
+    if (card.effect.type === 'DAMAGE') {
+      defender.takeDamage(card.effect.value);
+      console.log(`[Action] ${attacker.name} 消耗 ${card.cost} 费打出【${card.name}】，造成 ${card.effect.value} 点伤害！`);
+    }
+
+    // 5. 胜负判定
     if (defender.hp === 0) {
       this.state = 'ENDED';
-      console.log(`[Game Over] ${attacker.name} 取得了胜利！`);
+      console.log(`[Game Over] ${attacker.name} 获胜！`);
       return true;
     }
 
-    // 5. 切换回合（交换操作权，回合数 +1）
-    this.currentTurnPlayerId = defender.id;
-    this.turn++;
-
-    return true; // 返回 true 代表动作执行成功，状态已改变
+    return true;
   }
 
-  // 状态快照导出（后续广播给客户端渲染用）
+  // 玩家主动点击“结束回合”
+  endTurn(playerId) {
+    if (this.state !== 'PLAYING' || this.currentTurnPlayerId !== playerId) {
+      console.log('不是你的回合，无法结束回合！');
+      return false;
+    }
+
+    const nextPlayer = this.players.find(p => p.id !== playerId);
+
+    // 切换操作权，回合数 +1，给下一个玩家涨费、回满费并抽 1 张牌
+    this.currentTurnPlayerId = nextPlayer.id;
+    this.turn++;
+    nextPlayer.refreshMana(this.turn);
+    nextPlayer.drawCard(1);
+
+    console.log(`[Turn] 回合结束！进入第 ${this.turn} 回合，轮到 ${nextPlayer.name} 行动`);
+    return true;
+  }
+
+  // 状态快照导出
   getSnapshot() {
     return {
       roomId: this.roomId,
@@ -85,7 +127,8 @@ class Room {
         hp: p.hp,
         mana: p.mana,
         maxMana: p.maxMana,
-        handCount: p.hand.length, // 广播给全局时只透露手牌张数，隐藏手牌具体内容
+        deckCount: p.deck.length,
+        hand: p.hand
       })),
     };
   }

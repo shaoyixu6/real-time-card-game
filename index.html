@@ -5,21 +5,44 @@
   <title>卡牌游戏测试客户端</title>
   <style>
     body { font-family: sans-serif; padding: 20px; background: #222; color: #fff; }
-    button { padding: 8px 16px; margin-right: 10px; font-size: 14px; cursor: pointer; }
-    #log { margin-top: 20px; padding: 10px; background: #111; height: 400px; overflow-y: auto; font-family: monospace; line-height: 1.6; }
+    button { padding: 8px 16px; margin-right: 10px; font-size: 14px; cursor: pointer; border-radius: 4px; border: none; }
+    .btn-connect { background: #2196F3; color: white; }
+    .btn-end { background: #FF9800; color: white; font-weight: bold; }
+    
+    /* 手牌区域的卡牌按钮样式 */
+    #hand-area { margin-top: 20px; padding: 15px; background: #333; border-radius: 8px; min-height: 80px; }
+    .card-btn { 
+      background: #4CAF50; color: white; padding: 12px 16px; margin: 5px; 
+      border-radius: 6px; font-weight: bold; border: 2px solid #81C784;
+      transition: transform 0.1s;
+    }
+    .card-btn:hover { transform: translateY(-5px); background: #43A047; }
+
+    #log { margin-top: 20px; padding: 10px; background: #111; height: 320px; overflow-y: auto; font-family: monospace; line-height: 1.6; }
     .msg { color: #4CAF50; }
     .err { color: #f44336; }
   </style>
 </head>
 <body>
   <h1>2D 卡牌游戏 - 玩家客户端</h1>
-  <button onclick="connectServer()">🔌 点击连接服务器</button>
-  <button onclick="sendTest()">⚔️ 打出第一张手牌</button>
+  <div>
+    <button class="btn-connect" onclick="connectServer()">🔌 连接服务器</button>
+    <button class="btn-end" onclick="endTurn()">⏳ 结束回合 (End Turn)</button>
+  </div>
+
+  <!-- 动态渲染可点击的手牌区域 -->
+  <div id="hand-area">
+    <div>🃏 <strong>点击下方卡牌直接打出：</strong></div>
+    <div id="cards-container" style="margin-top: 10px;">等待开局发牌...</div>
+  </div>
+
   <div id="log">等待连接...</div>
 
   <script>
     let ws;
+    let myPlayerId = null; // 记录当前网页属于哪个玩家
     const logDiv = document.getElementById('log');
+    const cardsContainer = document.getElementById('cards-container');
 
     function log(msg, className = '') {
       logDiv.innerHTML += `<div class="${className}">[${new Date().toLocaleTimeString()}] ${msg}</div>`;
@@ -28,7 +51,6 @@
 
     function connectServer() {
       ws = new WebSocket('ws://localhost:8080');
-      
       ws.onopen = () => log('✅ 成功连上服务器！', 'msg');
       
       ws.onmessage = (e) => {
@@ -36,29 +58,33 @@
         
         if (response.type === 'SYSTEM') {
           log(`📩 系统: ${response.message}`, 'msg');
+          // 从欢迎语里提取出自己的 playerId (比如 p1 或 p2)
+          const match = response.message.match(/Player_(p\d+)/);
+          if (match) myPlayerId = match[1];
         } 
         else if (response.type === 'ERROR') {
           log(`❌ 错误: ${response.message}`, 'err');
         }
         else if (response.type === 'STATE_UPDATE') {
           const state = response.data;
-          log(`🔄 === 第 ${state.turn} 回合 ===`, 'msg');
-          log(`👉 当前行动方: ${state.currentTurnPlayerId === 'p1' ? '玩家 1 (Player_p1)' : '玩家 2 (Player_p2)'}`);
+          const isMyTurn = state.currentTurnPlayerId === myPlayerId;
+          
+          log(`🔄 === 第 ${state.turn} 回合 (${isMyTurn ? '🟢 你的回合!' : '🔴 对手回合'}) ===`, 'msg');
           
           state.players.forEach(p => {
+            const isMe = p.id === myPlayerId ? "【我】" : "【对手】";
             const isDead = p.hp === 0 ? " (💀 已阵亡)" : "";
-            // 兼容新旧后端：如果有手牌数组就打印具体卡牌，否则打印手牌数量
-            if (p.hand) {
-              const handStr = p.hand.map(c => `${c.name}(${c.cost}费/伤${c.effect.value})`).join(', ');
-              log(`   👤 ${p.name}: HP ${p.hp} | Mana ${p.mana}/${p.maxMana} | 牌库:${p.deckCount}张${isDead}`);
-              log(`      🃏 手牌: [${handStr || '空'}]`);
-            } else {
-              log(`   👤 ${p.name}: HP ${p.hp} | Mana ${p.mana}/${p.maxMana}${isDead}`);
+            log(`   👤 ${isMe} ${p.name}: HP ${p.hp} | 💎 Mana ${p.mana}/${p.maxMana} | 牌库:${p.deckCount}张${isDead}`);
+            
+            // 如果是当前网页对应的玩家，把他的手牌渲染成可点击的按钮！
+            if (p.id === myPlayerId) {
+              renderHandButtons(p.hand, isMyTurn, p.mana);
             }
           });
           
           if (state.state === 'ENDED') {
             log(`🏆 游戏结束！`, 'err');
+            cardsContainer.innerHTML = '游戏已结束';
           }
         }
       };
@@ -67,15 +93,43 @@
       ws.onclose = () => log('🔌 连接已断开');
     }
 
-    function sendTest() {
+    // 把手牌数组画成 HTML 按钮
+    function renderHandButtons(hand, isMyTurn, currentMana) {
+      if (!hand || hand.length === 0) {
+        cardsContainer.innerHTML = '手牌打空啦！';
+        return;
+      }
+      cardsContainer.innerHTML = '';
+      hand.forEach(card => {
+        const btn = document.createElement('button');
+        btn.className = 'card-btn';
+        btn.innerText = `${card.name} [💎${card.cost}费 | 💥伤${card.effect.value}]`;
+        
+        // 如果不是自己回合，或者费用不够，把卡牌按钮变灰提示
+        if (!isMyTurn || currentMana < card.cost) {
+          btn.style.opacity = '0.5';
+        }
+        
+        // 点击这张牌时，把它的具体 card.id 发给服务器
+        btn.onclick = () => playSpecificCard(card.id);
+        cardsContainer.appendChild(btn);
+      });
+    }
+
+    // 打出指定 ID 的卡牌
+    function playSpecificCard(cardId) {
       if (ws && ws.readyState === WebSocket.OPEN) {
-        const action = {
+        ws.send(JSON.stringify({
           type: 'PLAY_CARD',
-          payload: {} // 默认让服务器打出当前手牌里的第一张
-        };
-        ws.send(JSON.stringify(action));
-      } else {
-        log('还没连上呢，先点连接！', 'err');
+          payload: { cardId: cardId }
+        }));
+      }
+    }
+
+    // 主动结束回合
+    function endTurn() {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'END_TURN' }));
       }
     }
   </script>
