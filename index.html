@@ -9,16 +9,44 @@
     .btn-connect { background: #2196F3; color: white; }
     .btn-end { background: #FF9800; color: white; font-weight: bold; }
     
-    /* 手牌区域的卡牌按钮样式 */
     #hand-area { margin-top: 20px; padding: 15px; background: #333; border-radius: 8px; min-height: 80px; }
     .card-btn { 
       background: #4CAF50; color: white; padding: 12px 16px; margin: 5px; 
       border-radius: 6px; font-weight: bold; border: 2px solid #81C784;
       transition: transform 0.1s;
     }
-    .card-btn:hover { transform: translateY(-5px); background: #43A047; }
+    .card-btn.black-flash {
+      background: #1a1a1a; color: #ff1744; border: 2px solid #ff1744;
+      box-shadow: 0 0 8px rgba(255, 23, 68, 0.6);
+    }
+    .card-btn:hover { transform: translateY(-5px); }
 
-    #log { margin-top: 20px; padding: 10px; background: #111; height: 320px; overflow-y: auto; font-family: monospace; line-height: 1.6; }
+    /* ⚡ 黑闪 QTE 蓄力条样式 */
+    #qte-modal {
+      display: none; margin-top: 15px; padding: 20px; background: #111; 
+      border: 2px solid #ff1744; border-radius: 8px; text-align: center;
+      box-shadow: 0 0 20px rgba(255, 23, 68, 0.5);
+    }
+    #qte-bar {
+      position: relative; width: 400px; height: 30px; background: #333; 
+      margin: 15px auto; border-radius: 15px; overflow: hidden; border: 2px solid #555;
+    }
+    /* 红色成功判定区：占总宽度的 20%（位置在 40% ~ 60% 之间） */
+    #qte-target {
+      position: absolute; left: 40%; width: 20%; height: 100%; 
+      background: #ff1744; box-shadow: 0 0 12px #ff1744;
+    }
+    /* 左右跳动的白色指针 */
+    #qte-pointer {
+      position: absolute; left: 0%; width: 6px; height: 100%; 
+      background: #fff; box-shadow: 0 0 8px #fff;
+    }
+    .btn-strike {
+      background: #ff1744; color: white; font-size: 18px; font-weight: bold;
+      padding: 10px 30px; border-radius: 6px; box-shadow: 0 0 10px #ff1744;
+    }
+
+    #log { margin-top: 20px; padding: 10px; background: #111; height: 300px; overflow-y: auto; font-family: monospace; line-height: 1.6; }
     .msg { color: #4CAF50; }
     .err { color: #f44336; }
   </style>
@@ -30,19 +58,39 @@
     <button class="btn-end" onclick="endTurn()">⏳ 结束回合 (End Turn)</button>
   </div>
 
-  <!-- 动态渲染可点击的手牌区域 -->
   <div id="hand-area">
     <div>🃏 <strong>点击下方卡牌直接打出：</strong></div>
     <div id="cards-container" style="margin-top: 10px;">等待开局发牌...</div>
+  </div>
+
+  <!-- ⚡ 黑闪 QTE 弹窗区域 -->
+  <div id="qte-modal">
+    <div style="color: #ff1744; font-weight: bold; font-size: 18px;">⚡ 【黑闪】空间扭曲判定！在白线进入红色区域时按下！ ⚡</div>
+    <div id="qte-bar">
+      <div id="qte-target"></div>
+      <div id="qte-pointer"></div>
+    </div>
+    <button class="btn-strike" onclick="confirmBlackFlash()">⚡ 斩击！(Strike)</button>
   </div>
 
   <div id="log">等待连接...</div>
 
   <script>
     let ws;
-    let myPlayerId = null; // 记录当前网页属于哪个玩家
+    let myPlayerId = null;
+    let currentIsMyTurn = false;
+    let currentMyMana = 0;
+
+    // QTE 动画控制变量
+    let qteAnimationId = null;
+    let pointerPos = 0;
+    let direction = 1; // 1 向右，-1 向左
+    let pendingCardId = null;
+
     const logDiv = document.getElementById('log');
     const cardsContainer = document.getElementById('cards-container');
+    const qteModal = document.getElementById('qte-modal');
+    const qtePointer = document.getElementById('qte-pointer');
 
     function log(msg, className = '') {
       logDiv.innerHTML += `<div class="${className}">[${new Date().toLocaleTimeString()}] ${msg}</div>`;
@@ -58,7 +106,6 @@
         
         if (response.type === 'SYSTEM') {
           log(`📩 系统: ${response.message}`, 'msg');
-          // 从欢迎语里提取出自己的 playerId (比如 p1 或 p2)
           const match = response.message.match(/Player_(p\d+)/);
           if (match) myPlayerId = match[1];
         } 
@@ -67,24 +114,25 @@
         }
         else if (response.type === 'STATE_UPDATE') {
           const state = response.data;
-          const isMyTurn = state.currentTurnPlayerId === myPlayerId;
+          currentIsMyTurn = (state.currentTurnPlayerId === myPlayerId);
           
-          log(`🔄 === 第 ${state.turn} 回合 (${isMyTurn ? '🟢 你的回合!' : '🔴 对手回合'}) ===`, 'msg');
+          log(`🔄 === 第 ${state.turn} 回合 (${currentIsMyTurn ? '🟢 你的回合!' : '🔴 对手回合'}) ===`, 'msg');
           
           state.players.forEach(p => {
             const isMe = p.id === myPlayerId ? "【我】" : "【对手】";
             const isDead = p.hp === 0 ? " (💀 已阵亡)" : "";
             log(`   👤 ${isMe} ${p.name}: HP ${p.hp} | 💎 Mana ${p.mana}/${p.maxMana} | 牌库:${p.deckCount}张${isDead}`);
             
-            // 如果是当前网页对应的玩家，把他的手牌渲染成可点击的按钮！
             if (p.id === myPlayerId) {
-              renderHandButtons(p.hand, isMyTurn, p.mana);
+              currentMyMana = p.mana;
+              renderHandButtons(p.hand, currentIsMyTurn, p.mana);
             }
           });
           
           if (state.state === 'ENDED') {
             log(`🏆 游戏结束！`, 'err');
             cardsContainer.innerHTML = '游戏已结束';
+            qteModal.style.display = 'none';
           }
         }
       };
@@ -93,7 +141,6 @@
       ws.onclose = () => log('🔌 连接已断开');
     }
 
-    // 把手牌数组画成 HTML 按钮
     function renderHandButtons(hand, isMyTurn, currentMana) {
       if (!hand || hand.length === 0) {
         cardsContainer.innerHTML = '手牌打空啦！';
@@ -102,33 +149,94 @@
       cardsContainer.innerHTML = '';
       hand.forEach(card => {
         const btn = document.createElement('button');
-        btn.className = 'card-btn';
+        const isBlackFlash = card.effect.type === 'BLACK_FLASH';
+        btn.className = isBlackFlash ? 'card-btn black-flash' : 'card-btn';
         btn.innerText = `${card.name} [💎${card.cost}费 | 💥伤${card.effect.value}]`;
         
-        // 如果不是自己回合，或者费用不够，把卡牌按钮变灰提示
         if (!isMyTurn || currentMana < card.cost) {
-          btn.style.opacity = '0.5';
+          btn.style.opacity = '0.4';
         }
         
-        // 点击这张牌时，把它的具体 card.id 发给服务器
-        btn.onclick = () => playSpecificCard(card.id);
+        btn.onclick = () => handleCardClick(card);
         cardsContainer.appendChild(btn);
       });
     }
 
-    // 打出指定 ID 的卡牌
-    function playSpecificCard(cardId) {
+    // 点击卡牌时的分流处理
+    function handleCardClick(card) {
+      if (!currentIsMyTurn) {
+        log('⚠️ 还没轮到你的回合！', 'err');
+        return;
+      }
+      if (currentMyMana < card.cost) {
+        log(`⚠️ 法力值不足！需要 ${card.cost} 费`, 'err');
+        return;
+      }
+
+      // 如果是【黑闪】，启动 QTE 指针挑战！
+      if (card.effect.type === 'BLACK_FLASH') {
+        startBlackFlashQTE(card.id);
+      } else {
+        // 普通卡牌直接打出
+        sendPlayCard(card.id);
+      }
+    }
+
+    // 启动黑闪指针左右往返运动
+    function startBlackFlashQTE(cardId) {
+      pendingCardId = cardId;
+      qteModal.style.display = 'block';
+      pointerPos = 0;
+      direction = 1;
+
+      if (qteAnimationId) cancelAnimationFrame(qteAnimationId);
+
+      function animatePointer() {
+        // 每次移动的速度（想调难一点可以把 2.5 改成 4）
+        pointerPos += 2 * direction;
+        if (pointerPos >= 98) {
+          pointerPos = 98;
+          direction = -1;
+        } else if (pointerPos <= 0) {
+          pointerPos = 0;
+          direction = 1;
+        }
+        qtePointer.style.left = pointerPos + '%';
+        qteAnimationId = requestAnimationFrame(animatePointer);
+      }
+      animatePointer();
+    }
+
+    // 玩家按下“斩击！”按钮的瞬间，判定指针是否在 40% ~ 60% 的红区内
+    function confirmBlackFlash() {
+      if (qteAnimationId) cancelAnimationFrame(qteAnimationId);
+      qteModal.style.display = 'none';
+
+      // 判定区间：40% 到 60%
+      const isHit = (pointerPos >= 40 && pointerPos <= 60);
+      if (isHit) {
+        log('⚡⚡ 【黑闪】判定成功！！空间发生扭曲，打出 25 点暴击伤害！', 'msg');
+      } else {
+        log('💨 【黑闪】判定失败！指针偏离核心区，伤害落空（0 伤）！', 'err');
+      }
+
+      sendPlayCard(pendingCardId, isHit);
+      pendingCardId = null;
+    }
+
+    function sendPlayCard(cardId, qteSuccess = false) {
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({
           type: 'PLAY_CARD',
-          payload: { cardId: cardId }
+          payload: { cardId: cardId, qteSuccess: qteSuccess }
         }));
       }
     }
 
-    // 主动结束回合
     function endTurn() {
       if (ws && ws.readyState === WebSocket.OPEN) {
+        qteModal.style.display = 'none';
+        if (qteAnimationId) cancelAnimationFrame(qteAnimationId);
         ws.send(JSON.stringify({ type: 'END_TURN' }));
       }
     }

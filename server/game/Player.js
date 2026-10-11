@@ -11,14 +11,15 @@ class Player {
     this.hand = [];
     this.deck = [];
     
-    // 创建玩家时自动初始化牌库
     this.initDeck();
   }
 
   initDeck() {
     for (let i = 1; i <= 5; i++) {
-      this.deck.push(new Card(`fireball_${i}`, '小火球', 1, { type: 'DAMAGE', value: 5 }));
-      this.deck.push(new Card(`strike_${i}`, '重击', 2, { type: 'DAMAGE', value: 12 }));
+      // 1费：炎弹（稳定伤害 5）
+      this.deck.push(new Card(`fireball_${i}`, '🔥炎弹', 1, { type: 'DAMAGE', value: 5 }));
+      // 2费：黑闪（需要前端 QTE 判定成功才能打出 25 伤！）
+      this.deck.push(new Card(`strike_${i}`, '⚡黑闪', 2, { type: 'BLACK_FLASH', value: 25 }));
     }
     this.deck.sort(() => Math.random() - 0.5);
   }
@@ -39,9 +40,10 @@ class Player {
     }
   }
 
-  refreshMana(turnCount) {
-    this.maxMana = Math.min(turnCount, 10);
-    this.mana = this.maxMana;
+  // 每回合固定 3 点费用
+  refreshMana() {
+    this.maxMana = 3;
+    this.mana = 3;
   }
 }
 
