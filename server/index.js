@@ -1,73 +1,69 @@
 // server/index.js
-
 const WebSocket = require('ws');
-const Player = require('./game/Player');
 const Room = require('./game/Room');
+const Player = require('./game/Player');
 
 const wss = new WebSocket.Server({ port: 8080 });
+const room = new Room('room_001', () => broadcastRoomState(room));
 
-const globalRoom = new Room('room_001');
+const clients = new Map();
 let playerCounter = 1;
 
-console.log('WebSocket Server is running on ws://localhost:8080');
-
-// 广播最新状态给所有客户端
-function broadcastRoomState() {
-  const snapshot = globalRoom.getSnapshot();
-  const msg = JSON.stringify({ type: 'STATE_UPDATE', data: snapshot });
-  
-  wss.clients.forEach(client => {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(msg);
-    }
+function broadcastRoomState(roomInstance) {
+  const snapshot = roomInstance.getSnapshot();
+  const message = JSON.stringify({
+    type: 'STATE_UPDATE',
+    data: snapshot
   });
+
+  for (const [playerId, clientWs] of clients.entries()) {
+    if (clientWs.readyState === WebSocket.OPEN) {
+      clientWs.send(message);
+    }
+  }
 }
 
 wss.on('connection', (ws) => {
-  const playerId = 'p' + playerCounter++;
-  const playerName = 'Player_' + playerId;
-  
-  console.log(`[Network] ${playerName} connected!`);
+  const playerId = `p${playerCounter++}`;
+  const player = new Player(playerId, `Player_${playerId}`);
 
-  const newPlayer = new Player(playerId, playerName);
-  const joined = globalRoom.addPlayer(newPlayer);
-
-  if (joined) {
-    ws.send(JSON.stringify({
-      type: 'SYSTEM',
-      message: `Welcome ${playerName}! You joined ${globalRoom.roomId}`
-    }));
-
-    if (globalRoom.state === 'PLAYING') {
-      broadcastRoomState();
-    }
-  } else {
-    ws.send(JSON.stringify({ type: 'ERROR', message: 'Room is full!' }));
+  const joined = room.addPlayer(player);
+  if (!joined) {
+    ws.send(JSON.stringify({ type: 'ERROR', message: '房间已满！' }));
     ws.close();
     return;
   }
 
-  // 监听玩家发来的操作指令（出牌 / 结束回合）
-  ws.on('message', (message) => {
+  clients.set(playerId, ws);
+  ws.send(JSON.stringify({ type: 'SYSTEM', message: `Welcome ${player.name}! You joined ${room.roomId}` }));
+
+  if (room.state === 'PLAYING') {
+    broadcastRoomState(room);
+  }
+
+  ws.on('message', (rawMessage) => {
     try {
-      const action = JSON.parse(message);
-      
-      if (action.type === 'PLAY_CARD') {
-        const success = globalRoom.playCard(playerId, action.payload);
-        if (success) broadcastRoomState();
-      } 
-      else if (action.type === 'END_TURN') {
-        const success = globalRoom.endTurn(playerId);
-        if (success) broadcastRoomState();
+      const data = JSON.parse(rawMessage);
+      let stateChanged = false;
+
+      if (data.type === 'PLAY_CARD') {
+        stateChanged = room.playCard(playerId, data.payload);
+      } else if (data.type === 'END_TURN') {
+        stateChanged = room.endTurn(playerId);
+      }
+
+      if (stateChanged) {
+        broadcastRoomState(room);
       }
     } catch (err) {
-      console.log(`[Error] 收到非 JSON 格式消息: ${message}`);
+      console.error('解析消息失败:', err);
     }
   });
 
-  // 监听玩家掉线/刷新网页，自动清理座位
   ws.on('close', () => {
-    console.log(`[Network] ${playerName} disconnected.`);
-    globalRoom.removePlayer(playerId);
+    clients.delete(playerId);
+    room.removePlayer(playerId);
   });
 });
+
+console.log('WebSocket Server is running on ws://localhost:8080');

@@ -1,12 +1,15 @@
 // server/game/Room.js
 
 class Room {
-  constructor(roomId) {
+  constructor(roomId, onStateChange) {
     this.roomId = roomId;
+    this.onStateChange = onStateChange;
     this.players = [];
     this.state = 'WAITING';
     this.turn = 1;
     this.currentTurnPlayerId = null;
+    this.turnTimer = null;
+    this.currentTurnTimeLimit = null;
   }
 
   addPlayer(player) {
@@ -19,11 +22,20 @@ class Room {
   }
 
   removePlayer(playerId) {
+    this.clearTurnTimer();
     this.players = this.players.filter(p => p.id !== playerId);
     this.state = 'WAITING';
     this.turn = 1;
     this.currentTurnPlayerId = null;
+    this.currentTurnTimeLimit = null;
     console.log(`[Room ${this.roomId}] 玩家 ${playerId} 离开，房间已腾出座位`);
+  }
+
+  clearTurnTimer() {
+    if (this.turnTimer) {
+      clearTimeout(this.turnTimer);
+      this.turnTimer = null;
+    }
   }
 
   startGame() {
@@ -60,26 +72,28 @@ class Room {
       return false;
     }
 
-    // 扣除费用并移除手牌
     attacker.mana -= card.cost;
     attacker.hand.splice(cardIndex, 1);
 
-    // 结算卡牌效果
     if (card.effect.type === 'DAMAGE') {
       defender.takeDamage(card.effect.value);
-      console.log(`[Action] ${attacker.name} 消耗 ${card.cost} 费打出【${card.name}】，造成 ${card.effect.value} 点伤害！`);
+      console.log(`[Action] ${attacker.name} 打出【${card.name}】，造成 ${card.effect.value} 点伤害！`);
     } 
-    // 👇 新增：黑闪 QTE 专属判定结算
     else if (card.effect.type === 'BLACK_FLASH') {
       if (payload.qteSuccess) {
         defender.takeDamage(card.effect.value);
-        console.log(`⚡[黑闪暴击!!] ${attacker.name} 完美命中判定区！打出【${card.name}】造成 ${card.effect.value} 点毁灭伤害！`);
+        console.log(`⚡[黑闪暴击!!] ${attacker.name} 完美命中判定区！造成 ${card.effect.value} 点毁灭伤害！`);
       } else {
-        console.log(`💨[黑闪失误...] ${attacker.name} 未能把握空间扭曲的瞬间，【${card.name}】发动失败，造成 0 点伤害！`);
+        console.log(`💨[黑闪失误...] ${attacker.name} 未能命中核心区，造成 0 点伤害！`);
       }
+    }
+    else if (card.effect.type === 'FLOOD') {
+      defender.nextTurnTimeLimit = card.effect.value;
+      console.log(`🌊[大水漫灌!] ${attacker.name} 打出【${card.name}】！${defender.name} 下回合出牌时间被限制为 ${card.effect.value} 秒！`);
     }
 
     if (defender.hp === 0) {
+      this.clearTurnTimer();
       this.state = 'ENDED';
       console.log(`[Game Over] ${attacker.name} 获胜！`);
       return true;
@@ -93,6 +107,8 @@ class Room {
       return false;
     }
 
+    this.clearTurnTimer();
+
     const nextPlayer = this.players.find(p => p.id !== playerId);
 
     this.currentTurnPlayerId = nextPlayer.id;
@@ -100,7 +116,25 @@ class Room {
     nextPlayer.refreshMana();
     nextPlayer.drawCard(1);
 
-    console.log(`[Turn] 回合结束！进入第 ${this.turn} 回合，轮到 ${nextPlayer.name} 行动`);
+    if (nextPlayer.nextTurnTimeLimit) {
+      const limitSeconds = nextPlayer.nextTurnTimeLimit;
+      this.currentTurnTimeLimit = limitSeconds;
+      nextPlayer.nextTurnTimeLimit = null;
+
+      console.log(`⏱️ [大水计时开始] ${nextPlayer.name} 只有 ${limitSeconds} 秒时间出牌！`);
+
+      this.turnTimer = setTimeout(() => {
+        console.log(`🌊 [时间到!] ${nextPlayer.name} 的 ${limitSeconds} 秒时间耗尽，回合被大水强制冲走！`);
+        this.endTurn(nextPlayer.id);
+        if (this.onStateChange) {
+          this.onStateChange();
+        }
+      }, limitSeconds * 1000);
+    } else {
+      this.currentTurnTimeLimit = null;
+      console.log(`[Turn] 回合结束！进入第 ${this.turn} 回合，轮到 ${nextPlayer.name} 行动`);
+    }
+
     return true;
   }
 
@@ -110,13 +144,14 @@ class Room {
       state: this.state,
       turn: this.turn,
       currentTurnPlayerId: this.currentTurnPlayerId,
+      turnTimeLimit: this.currentTurnTimeLimit,
       players: this.players.map((p) => ({
         id: p.id,
         name: p.name,
         hp: p.hp,
         mana: p.mana,
         maxMana: p.maxMana,
-        deckCount: p.deck.length,
+        nextTurnFlooded: p.nextTurnTimeLimit, // 直接传递秒数（如 6），没有则为 null
         hand: p.hand
       })),
     };

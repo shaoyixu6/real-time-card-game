@@ -4,11 +4,37 @@
   <meta charset="UTF-8">
   <title>卡牌游戏测试客户端</title>
   <style>
-    body { font-family: sans-serif; padding: 20px; background: #222; color: #fff; }
+    body { font-family: sans-serif; padding: 20px; background: #222; color: #fff; margin: 0; overflow-x: hidden; }
     button { padding: 8px 16px; margin-right: 10px; font-size: 14px; cursor: pointer; border-radius: 4px; border: none; }
     .btn-connect { background: #2196F3; color: white; }
     .btn-end { background: #FF9800; color: white; font-weight: bold; }
     
+    /* 🌊 全屏被水淹没的溺水特效层 */
+    #water-overlay {
+      display: none;
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: linear-gradient(180deg, rgba(0, 105, 180, 0.35) 0%, rgba(0, 40, 90, 0.75) 100%);
+      box-shadow: inset 0 0 100px #00e5ff;
+      z-index: 999;
+      pointer-events: none;
+      flex-direction: column; justify-content: center; align-items: center;
+      animation: wavePulse 0.6s infinite alternate ease-in-out;
+    }
+    @keyframes wavePulse {
+      from { transform: scale(1); }
+      to { transform: scale(1.02); }
+    }
+    #big-countdown {
+      font-size: 160px; font-weight: 900; color: #00e5ff;
+      text-shadow: 0 0 30px #00e5ff, 0 0 60px #004d80, 4px 4px 0px #000;
+      line-height: 1;
+    }
+    #water-warning-text {
+      font-size: 28px; font-weight: bold; color: #fff;
+      text-shadow: 0 0 10px #000; margin-top: 10px;
+      background: rgba(0, 0, 0, 0.5); padding: 8px 24px; border-radius: 20px;
+    }
+
     #hand-area { margin-top: 20px; padding: 15px; background: #333; border-radius: 8px; min-height: 80px; }
     .card-btn { 
       background: #4CAF50; color: white; padding: 12px 16px; margin: 5px; 
@@ -19,9 +45,12 @@
       background: #1a1a1a; color: #ff1744; border: 2px solid #ff1744;
       box-shadow: 0 0 8px rgba(255, 23, 68, 0.6);
     }
+    .card-btn.flood-card {
+      background: #003366; color: #00e5ff; border: 2px solid #00e5ff;
+      box-shadow: 0 0 8px rgba(0, 229, 255, 0.5);
+    }
     .card-btn:hover { transform: translateY(-5px); }
 
-    /* ⚡ 黑闪 QTE 蓄力条样式 */
     #qte-modal {
       display: none; margin-top: 15px; padding: 20px; background: #111; 
       border: 2px solid #ff1744; border-radius: 8px; text-align: center;
@@ -31,12 +60,10 @@
       position: relative; width: 400px; height: 30px; background: #333; 
       margin: 15px auto; border-radius: 15px; overflow: hidden; border: 2px solid #555;
     }
-    /* 红色成功判定区：占总宽度的 20%（位置在 40% ~ 60% 之间） */
     #qte-target {
       position: absolute; left: 40%; width: 20%; height: 100%; 
       background: #ff1744; box-shadow: 0 0 12px #ff1744;
     }
-    /* 左右跳动的白色指针 */
     #qte-pointer {
       position: absolute; left: 0%; width: 6px; height: 100%; 
       background: #fff; box-shadow: 0 0 8px #fff;
@@ -49,9 +76,16 @@
     #log { margin-top: 20px; padding: 10px; background: #111; height: 300px; overflow-y: auto; font-family: monospace; line-height: 1.6; }
     .msg { color: #4CAF50; }
     .err { color: #f44336; }
+    .flood-msg { color: #00e5ff; font-weight: bold; }
   </style>
 </head>
 <body>
+  <!-- 🌊 全屏被水淹没特效 + 中央大字倒计时 -->
+  <div id="water-overlay">
+    <div id="big-countdown">6</div>
+    <div id="water-warning-text">🌊 正在被大水淹没！快出牌！！ 🌊</div>
+  </div>
+
   <h1>2D 卡牌游戏 - 玩家客户端</h1>
   <div>
     <button class="btn-connect" onclick="connectServer()">🔌 连接服务器</button>
@@ -63,7 +97,6 @@
     <div id="cards-container" style="margin-top: 10px;">等待开局发牌...</div>
   </div>
 
-  <!-- ⚡ 黑闪 QTE 弹窗区域 -->
   <div id="qte-modal">
     <div style="color: #ff1744; font-weight: bold; font-size: 18px;">⚡ 【黑闪】空间扭曲判定！在白线进入红色区域时按下！ ⚡</div>
     <div id="qte-bar">
@@ -80,17 +113,21 @@
     let myPlayerId = null;
     let currentIsMyTurn = false;
     let currentMyMana = 0;
+    let lastTurnNumber = 0;
 
-    // QTE 动画控制变量
     let qteAnimationId = null;
     let pointerPos = 0;
-    let direction = 1; // 1 向右，-1 向左
+    let direction = 1;
     let pendingCardId = null;
+
+    let floodIntervalId = null;
 
     const logDiv = document.getElementById('log');
     const cardsContainer = document.getElementById('cards-container');
     const qteModal = document.getElementById('qte-modal');
     const qtePointer = document.getElementById('qte-pointer');
+    const waterOverlay = document.getElementById('water-overlay');
+    const bigCountdown = document.getElementById('big-countdown');
 
     function log(msg, className = '') {
       logDiv.innerHTML += `<div class="${className}">[${new Date().toLocaleTimeString()}] ${msg}</div>`;
@@ -114,14 +151,27 @@
         }
         else if (response.type === 'STATE_UPDATE') {
           const state = response.data;
+          const isNewTurn = (state.turn !== lastTurnNumber);
+          lastTurnNumber = state.turn;
           currentIsMyTurn = (state.currentTurnPlayerId === myPlayerId);
+
+          if (!currentIsMyTurn) {
+            qteModal.style.display = 'none';
+            if (qteAnimationId) cancelAnimationFrame(qteAnimationId);
+          }
+
+          if (isNewTurn) {
+            startFloodCountdownUI(state.turnTimeLimit, currentIsMyTurn);
+          }
           
           log(`🔄 === 第 ${state.turn} 回合 (${currentIsMyTurn ? '🟢 你的回合!' : '🔴 对手回合'}) ===`, 'msg');
           
           state.players.forEach(p => {
             const isMe = p.id === myPlayerId ? "【我】" : "【对手】";
             const isDead = p.hp === 0 ? " (💀 已阵亡)" : "";
-            log(`   👤 ${isMe} ${p.name}: HP ${p.hp} | 💎 Mana ${p.mana}/${p.maxMana} | 牌库:${p.deckCount}张${isDead}`);
+            const floodTag = p.nextTurnFlooded ? ` [🌊下回合将被水淹${p.nextTurnFlooded}秒!]` : "";
+            // 已彻底移除“牌库”显示！
+            log(`   👤 ${isMe} ${p.name}: HP ${p.hp} | 💎 Mana ${p.mana}/${p.maxMana}${floodTag}${isDead}`);
             
             if (p.id === myPlayerId) {
               currentMyMana = p.mana;
@@ -130,6 +180,8 @@
           });
           
           if (state.state === 'ENDED') {
+            clearInterval(floodIntervalId);
+            waterOverlay.style.display = 'none';
             log(`🏆 游戏结束！`, 'err');
             cardsContainer.innerHTML = '游戏已结束';
             qteModal.style.display = 'none';
@@ -141,6 +193,32 @@
       ws.onclose = () => log('🔌 连接已断开');
     }
 
+    function startFloodCountdownUI(timeLimitSeconds, isMyTurn) {
+      clearInterval(floodIntervalId);
+      waterOverlay.style.display = 'none';
+
+      if (!timeLimitSeconds) return;
+
+      if (isMyTurn) {
+        waterOverlay.style.display = 'flex';
+        let count = Math.ceil(timeLimitSeconds);
+        bigCountdown.innerText = count;
+        log(`🌊 咕噜咕噜... 你被【大水】淹没了！只剩 ${count} 秒！`, 'flood-msg');
+
+        floodIntervalId = setInterval(() => {
+          count--;
+          if (count > 0) {
+            bigCountdown.innerText = count;
+          } else {
+            clearInterval(floodIntervalId);
+            waterOverlay.style.display = 'none';
+          }
+        }, 1000);
+      } else {
+        log(`🌊 对手正在被你的【大水】淹没（${timeLimitSeconds}秒倒计时中）...`, 'flood-msg');
+      }
+    }
+
     function renderHandButtons(hand, isMyTurn, currentMana) {
       if (!hand || hand.length === 0) {
         cardsContainer.innerHTML = '手牌打空啦！';
@@ -149,9 +227,17 @@
       cardsContainer.innerHTML = '';
       hand.forEach(card => {
         const btn = document.createElement('button');
-        const isBlackFlash = card.effect.type === 'BLACK_FLASH';
-        btn.className = isBlackFlash ? 'card-btn black-flash' : 'card-btn';
-        btn.innerText = `${card.name} [💎${card.cost}费 | 💥伤${card.effect.value}]`;
+        
+        if (card.effect.type === 'BLACK_FLASH') {
+          btn.className = 'card-btn black-flash';
+          btn.innerText = `${card.name} [💎${card.cost}费 | 💥伤${card.effect.value}]`;
+        } else if (card.effect.type === 'FLOOD') {
+          btn.className = 'card-btn flood-card';
+          btn.innerText = `${card.name} [💎${card.cost}费 | 🌊淹${card.effect.value}秒]`;
+        } else {
+          btn.className = 'card-btn';
+          btn.innerText = `${card.name} [💎${card.cost}费 | 💥伤${card.effect.value}]`;
+        }
         
         if (!isMyTurn || currentMana < card.cost) {
           btn.style.opacity = '0.4';
@@ -162,7 +248,6 @@
       });
     }
 
-    // 点击卡牌时的分流处理
     function handleCardClick(card) {
       if (!currentIsMyTurn) {
         log('⚠️ 还没轮到你的回合！', 'err');
@@ -173,16 +258,16 @@
         return;
       }
 
-      // 如果是【黑闪】，启动 QTE 指针挑战！
       if (card.effect.type === 'BLACK_FLASH') {
         startBlackFlashQTE(card.id);
       } else {
-        // 普通卡牌直接打出
+        if (card.effect.type === 'FLOOD') {
+          log(`🌊 你发动了【大水】！对手下回合将被水淹没 ${card.effect.value} 秒！`, 'flood-msg');
+        }
         sendPlayCard(card.id);
       }
     }
 
-    // 启动黑闪指针左右往返运动
     function startBlackFlashQTE(cardId) {
       pendingCardId = cardId;
       qteModal.style.display = 'block';
@@ -192,8 +277,7 @@
       if (qteAnimationId) cancelAnimationFrame(qteAnimationId);
 
       function animatePointer() {
-        // 每次移动的速度（想调难一点可以把 2.5 改成 4）
-        pointerPos += 2 * direction;
+        pointerPos += 1.2 * direction;
         if (pointerPos >= 98) {
           pointerPos = 98;
           direction = -1;
@@ -207,12 +291,10 @@
       animatePointer();
     }
 
-    // 玩家按下“斩击！”按钮的瞬间，判定指针是否在 40% ~ 60% 的红区内
     function confirmBlackFlash() {
       if (qteAnimationId) cancelAnimationFrame(qteAnimationId);
       qteModal.style.display = 'none';
 
-      // 判定区间：40% 到 60%
       const isHit = (pointerPos >= 40 && pointerPos <= 60);
       if (isHit) {
         log('⚡⚡ 【黑闪】判定成功！！空间发生扭曲，打出 25 点暴击伤害！', 'msg');
@@ -236,6 +318,8 @@
     function endTurn() {
       if (ws && ws.readyState === WebSocket.OPEN) {
         qteModal.style.display = 'none';
+        waterOverlay.style.display = 'none';
+        clearInterval(floodIntervalId);
         if (qteAnimationId) cancelAnimationFrame(qteAnimationId);
         ws.send(JSON.stringify({ type: 'END_TURN' }));
       }
