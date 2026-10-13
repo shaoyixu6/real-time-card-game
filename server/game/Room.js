@@ -1,18 +1,68 @@
 // server/game/Room.js
 
+const EFFECT_HANDLERS = {
+  'DAMAGE': (attacker, defender, effect, payload, room) => {
+    defender.takeDamage(effect.value);
+    if (room.onAction) room.onAction({ type: 'FIREBALL', attacker: attacker.id, target: defender.id, value: effect.value });
+  },
+  
+  'BLACK_FLASH': (attacker, defender, effect, payload, room) => {
+    if (payload && payload.qteSuccess) {
+      defender.takeDamage(effect.value);
+      if (room.onAction) room.onAction({ type: 'BLACK_FLASH', attacker: attacker.id, target: defender.id, value: effect.value, success: true });
+    } else {
+      if (room.onAction) room.onAction({ type: 'BLACK_FLASH', attacker: attacker.id, target: defender.id, value: 0, success: false });
+    }
+  },
+
+  'FLOOD': (attacker, defender, effect, payload, room) => {
+    defender.nextTurnTimeLimit = effect.value;
+  },
+
+  'SLEEP': (attacker, defender, effect, payload, room) => {
+    defender.isSleeping = true;
+    defender.isStunned = false;
+    if (room.onAction) room.onAction({ type: 'START_SLEEP_QTE', target: defender.id });
+    defender.sleepTimer = setTimeout(() => {
+      defender.isSleeping = false;
+      defender.isStunned = true; 
+      defender.nextTurnSkip = true; 
+      if (room.onStateChange) room.onStateChange();
+    }, 5000);
+  },
+
+  'MAGIC_BOX': (attacker, defender, effect, payload, room) => {
+    if (defender.isSleeping || defender.isStunned) {
+      defender.takeDamage(effect.value);
+      // 🌟【修改】：将整张暗牌（tributeCard）发送给前端
+      if (room.onAction) room.onAction({ type: 'MAGIC_BOX_AUTO_HIT', target: defender.id, value: effect.value, tributeCard: payload.tributeCard });
+      return;
+    }
+
+    room.state = 'BOX_GUESSING';
+    room.boxData = {
+      attackerId: attacker.id,
+      defenderId: defender.id,
+      tributeCard: payload.tributeCard, // 🌟【修改】：存入整张暗牌的数据
+      timer: setTimeout(() => {
+        room.resolveBoxGuess(defender.id, null); 
+      }, 6000)
+    };
+  }
+};
+
 class Room {
   constructor(roomId, onStateChange, onAction) {
     this.roomId = roomId;
     this.onStateChange = onStateChange;
-    this.onAction = onAction; // 👈 接收动画广播喇叭
+    this.onAction = onAction;
     this.players = [];
-    this.state = 'WAITING';
+    this.state = 'WAITING'; 
     this.turn = 1;
     this.currentTurnPlayerId = null;
     this.turnTimer = null;
-    this.sleepTimer = null;
     this.currentTurnTimeLimit = null;
-    this.isCurrentPlayerSleeping = false;
+    this.boxData = null; 
   }
 
   addPlayer(player) {
@@ -28,13 +78,12 @@ class Room {
     this.state = 'WAITING';
     this.turn = 1;
     this.currentTurnPlayerId = null;
-    this.currentTurnTimeLimit = null;
-    this.isCurrentPlayerSleeping = false;
   }
 
   clearAllTimers() {
     if (this.turnTimer) { clearTimeout(this.turnTimer); this.turnTimer = null; }
-    if (this.sleepTimer) { clearTimeout(this.sleepTimer); this.sleepTimer = null; }
+    if (this.boxData && this.boxData.timer) { clearTimeout(this.boxData.timer); }
+    this.players.forEach(p => { if (p.sleepTimer) { clearTimeout(p.sleepTimer); p.sleepTimer = null; } });
   }
 
   startGame() {
@@ -47,94 +96,115 @@ class Room {
   }
 
   playCard(playerId, payload) {
-    if (this.state !== 'PLAYING' || this.currentTurnPlayerId !== playerId || this.isCurrentPlayerSleeping) return false;
+    // 🌟【关键修复】：魔术箱猜谜请求特权通道！无视回合限制直接处理！
+    if (payload && payload.action === 'GUESS_BOX') {
+      return this.resolveBoxGuess(playerId, payload.suit);
+    }
+
+    // 正常出牌必须满足：在自己的回合且不是时停状态
+    if (this.state !== 'PLAYING' || this.currentTurnPlayerId !== playerId) return false;
 
     const attacker = this.players.find(p => p.id === playerId);
     const defender = this.players.find(p => p.id !== playerId);
-    const cardIndex = payload && payload.cardId ? attacker.hand.findIndex(c => c.id === payload.cardId) : 0;
-    if (cardIndex === -1 || attacker.hand.length === 0) return false;
+    const card = attacker.hand.find(c => c.id === payload.cardId);
+    if (!card || attacker.mana < card.cost) return false;
 
-    const card = attacker.hand[cardIndex];
-    if (attacker.mana < card.cost) return false;
-
-    attacker.mana -= card.cost;
-    attacker.hand.splice(cardIndex, 1);
-
-    // 👇 核心改动：在扣血的同时，通知前端播放对应特效！
-    if (card.effect.type === 'DAMAGE') {
-      defender.takeDamage(card.effect.value);
-      if (this.onAction) this.onAction({ type: 'FIREBALL', attacker: attacker.id, target: defender.id, value: card.effect.value });
-    } 
-    else if (card.effect.type === 'BLACK_FLASH') {
-      if (payload.qteSuccess) {
-        defender.takeDamage(card.effect.value);
-        if (this.onAction) this.onAction({ type: 'BLACK_FLASH', attacker: attacker.id, target: defender.id, value: card.effect.value, success: true });
-      } else {
-        if (this.onAction) this.onAction({ type: 'BLACK_FLASH', attacker: attacker.id, target: defender.id, value: 0, success: false });
-      }
-    }
-    else if (card.effect.type === 'FLOOD') {
-      defender.nextTurnTimeLimit = card.effect.value;
-    }
-    else if (card.effect.type === 'SLEEP') {
-      defender.nextTurnSleep = true;
+    if (card.effect.type === 'MAGIC_BOX') {
+      const tributeCard = attacker.hand.find(c => c.id === payload.tributeId);
+      if (!tributeCard || tributeCard.id === card.id) return false;
+      
+      attacker.mana -= card.cost;
+      attacker.hand = attacker.hand.filter(c => c.id !== card.id && c.id !== tributeCard.id);
+      // 🌟【修改】：把整张卡牌对象塞进 payload
+      EFFECT_HANDLERS['MAGIC_BOX'](attacker, defender, card.effect, { tributeCard: tributeCard }, this);
+    }else {
+      attacker.mana -= card.cost;
+      attacker.hand = attacker.hand.filter(c => c.id !== card.id);
+      const handler = EFFECT_HANDLERS[card.effect.type];
+      if (handler) handler(attacker, defender, card.effect, payload, this);
     }
 
-    if (defender.hp === 0) {
-      this.clearAllTimers();
-      this.state = 'ENDED';
-    }
+    if (defender.hp === 0) { this.clearAllTimers(); this.state = 'ENDED'; }
     return true;
   }
 
-  wakeUp(playerId) {
-    if (this.state !== 'PLAYING' || this.currentTurnPlayerId !== playerId || !this.isCurrentPlayerSleeping) return false;
+  resolveBoxGuess(playerId, guessSuit) {
+    if (this.state !== 'BOX_GUESSING' || this.boxData.defenderId !== playerId) return false;
+    clearTimeout(this.boxData.timer);
+    
+    const attacker = this.players.find(p => p.id === this.boxData.attackerId);
+    const defender = this.players.find(p => p.id === this.boxData.defenderId);
+    const actualCard = this.boxData.tributeCard; // 🌟 取出整张底牌
+    const actualSuit = actualCard.suit; 
 
-    if (this.sleepTimer) { clearTimeout(this.sleepTimer); this.sleepTimer = null; }
-    this.isCurrentPlayerSleeping = false;
+    const safeGuess = guessSuit ? guessSuit.charAt(0) : null;
+    const safeActual = actualSuit ? actualSuit.charAt(0) : null;
+
+    if (safeGuess === null) {
+      defender.takeDamage(10); 
+      if (this.onAction) this.onAction({ type: 'MAGIC_BOX_RESULT', target: defender.id, result: 'TIMEOUT', damage: 10, tributeCard: actualCard });
+    } else if (safeGuess === safeActual) {
+      attacker.takeDamage(20); 
+      if (this.onAction) this.onAction({ type: 'MAGIC_BOX_RESULT', target: attacker.id, result: 'REFLECT', damage: 20, tributeCard: actualCard });
+    } else {
+      defender.takeDamage(20); 
+      if (this.onAction) this.onAction({ type: 'MAGIC_BOX_RESULT', target: defender.id, result: 'HIT', damage: 20, tributeCard: actualCard });
+    }
+
+    this.state = 'PLAYING'; 
+    this.boxData = null;
+    
+    if (attacker.hp === 0 || defender.hp === 0) { this.clearAllTimers(); this.state = 'ENDED'; }
+    if (this.onStateChange) this.onStateChange();
+    return true;
+  }
+  
+  wakeUp(playerId) {
     const player = this.players.find(p => p.id === playerId);
+    if (!player || !player.isSleeping) return false;
+
+    clearTimeout(player.sleepTimer);
+    player.isSleeping = false;
+    player.isStunned = false;
     
     player.takeDamage(8);
-    // 👇 挣扎醒来受到的伤害也触发受击特效！
     if (this.onAction) this.onAction({ type: 'WAKE_UP_DAMAGE', target: player.id, value: 8 });
 
-    if (player.hp === 0) {
-      this.clearAllTimers();
-      this.state = 'ENDED';
-    }
+    if (player.hp === 0) { this.clearAllTimers(); this.state = 'ENDED'; }
+    if (this.onStateChange) this.onStateChange();
     return true;
   }
 
   endTurn(playerId) {
     if (this.state !== 'PLAYING' || this.currentTurnPlayerId !== playerId) return false;
-    this.clearAllTimers();
-    this.isCurrentPlayerSleeping = false;
+    if (this.turnTimer) { clearTimeout(this.turnTimer); this.turnTimer = null; }
 
     const nextPlayer = this.players.find(p => p.id !== playerId);
-    this.currentTurnPlayerId = nextPlayer.id;
-    this.turn++;
-    nextPlayer.refreshMana();
-    nextPlayer.drawCard(1);
-
-    if (nextPlayer.nextTurnSleep) {
-      nextPlayer.nextTurnSleep = false;
-      this.isCurrentPlayerSleeping = true;
-      this.sleepTimer = setTimeout(() => {
-        this.endTurn(nextPlayer.id);
-        if (this.onStateChange) this.onStateChange();
-      }, 5000);
-    }
-
-    if (nextPlayer.nextTurnTimeLimit) {
-      const limitSeconds = nextPlayer.nextTurnTimeLimit;
-      this.currentTurnTimeLimit = limitSeconds;
-      nextPlayer.nextTurnTimeLimit = null;
-      this.turnTimer = setTimeout(() => {
-        this.endTurn(nextPlayer.id);
-        if (this.onStateChange) this.onStateChange();
-      }, limitSeconds * 1000);
+    
+    if (nextPlayer.nextTurnSkip) {
+      nextPlayer.nextTurnSkip = false;
+      nextPlayer.isStunned = false; 
+      this.turn++;
+      const me = this.players.find(p => p.id === playerId);
+      me.refreshMana();
+      me.drawCard(1);
     } else {
-      this.currentTurnTimeLimit = null;
+      this.currentTurnPlayerId = nextPlayer.id;
+      this.turn++;
+      nextPlayer.refreshMana();
+      nextPlayer.drawCard(1);
+
+      if (nextPlayer.nextTurnTimeLimit) {
+        const limitSeconds = nextPlayer.nextTurnTimeLimit;
+        this.currentTurnTimeLimit = limitSeconds;
+        nextPlayer.nextTurnTimeLimit = null;
+        this.turnTimer = setTimeout(() => {
+          this.endTurn(nextPlayer.id);
+          if (this.onStateChange) this.onStateChange();
+        }, limitSeconds * 1000);
+      } else {
+        this.currentTurnTimeLimit = null;
+      }
     }
     return true;
   }
@@ -144,10 +214,12 @@ class Room {
       roomId: this.roomId, state: this.state, turn: this.turn,
       currentTurnPlayerId: this.currentTurnPlayerId,
       turnTimeLimit: this.currentTurnTimeLimit,
-      isCurrentPlayerSleeping: this.isCurrentPlayerSleeping,
+      boxData: this.boxData ? { defenderId: this.boxData.defenderId } : null,
       players: this.players.map(p => ({
         id: p.id, name: p.name, hp: p.hp, mana: p.mana, maxMana: p.maxMana,
-        nextTurnFlooded: p.nextTurnTimeLimit, nextTurnSleep: p.nextTurnSleep, hand: p.hand
+        nextTurnFlooded: p.nextTurnTimeLimit, 
+        isSleeping: p.isSleeping, isStunned: p.isStunned, nextTurnSkip: p.nextTurnSkip,
+        hand: p.hand
       }))
     };
   }
