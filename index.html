@@ -2,425 +2,217 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <title>2D 实时卡牌对战 - 炉石牌桌版</title>
+  <title>2D 实时卡牌对战 - 特效升级版</title>
   <style>
+    /* ... 之前的棋盘和布局样式保持不变，新增以下特效样式 ... */
     * { box-sizing: border-box; user-select: none; }
     body {
       margin: 0; padding: 0; width: 100vw; height: 100vh; overflow: hidden;
       font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
-      /* 外围深色木纹环境 */
-      background: #1a120b;
-      display: flex; justify-content: center; align-items: center;
+      background: #1a120b; display: flex; justify-content: center; align-items: center;
     }
-
-    /* ================= 炉石核心沙盘棋盘 ================= */
     #board {
       position: relative; width: 100vw; height: 100vh;
-      /* 暖黄色沙盘桌面 + 四周暗角立体感 */
       background: radial-gradient(ellipse at center, #e6c89c 0%, #c89d66 65%, #6e4720 100%);
-      border: 14px solid #3d2314;
-      box-shadow: inset 0 0 80px rgba(0,0,0,0.75);
-      overflow: hidden;
+      border: 14px solid #3d2314; box-shadow: inset 0 0 80px rgba(0,0,0,0.75); overflow: hidden;
     }
-
-    /* 棋盘正中央的楚河汉界分割凹槽线 */
     #board-center-line {
       position: absolute; top: 50%; left: 0; width: 100%; height: 4px;
-      background: rgba(90, 50, 20, 0.45);
-      box-shadow: 0 2px 4px rgba(255, 230, 190, 0.5);
-      z-index: 1;
+      background: rgba(90, 50, 20, 0.45); box-shadow: 0 2px 4px rgba(255, 230, 190, 0.5); z-index: 1;
     }
-
-    /* 顶部连接状态条 */
-    #top-bar {
-      position: absolute; top: 12px; left: 16px; z-index: 60;
-      display: flex; gap: 10px; align-items: center;
-    }
+    #top-bar { position: absolute; top: 12px; left: 16px; z-index: 60; display: flex; gap: 10px; align-items: center; }
     .btn-connect {
-      background: linear-gradient(180deg, #29b6f6, #0277bd);
-      color: #fff; font-weight: 900; padding: 8px 18px; border-radius: 20px;
-      border: 2px solid #fff; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5);
-      font-size: 14px;
+      background: linear-gradient(180deg, #29b6f6, #0277bd); color: #fff; font-weight: 900;
+      padding: 8px 18px; border-radius: 20px; border: 2px solid #fff; cursor: pointer; font-size: 14px;
     }
     #player-tag {
-      background: rgba(0,0,0,0.65); color: #ffd54f; padding: 6px 14px;
-      border-radius: 15px; font-size: 13px; font-weight: bold; border: 1px solid #8d6e63;
+      background: rgba(0,0,0,0.65); color: #ffd54f; padding: 6px 14px; border-radius: 15px; font-size: 13px; font-weight: bold; border: 1px solid #8d6e63;
     }
-
-    /* ================= 左上角：敌方扇形卡背区 ================= */
-    #enemy-hand {
-      position: absolute; top: -22px; left: 120px;
-      display: flex; z-index: 10;
-    }
+    #enemy-hand { position: absolute; top: -22px; left: 120px; display: flex; z-index: 10; }
     .enemy-card-back {
-      width: 68px; height: 98px; border-radius: 8px;
+      width: 68px; height: 98px; border-radius: 8px; margin-left: -22px;
       background: radial-gradient(circle, #29b6f6 15%, #1565c0 55%, #0d47a1 100%);
-      border: 3px solid #d4af37;
-      box-shadow: -2px 4px 10px rgba(0,0,0,0.65);
-      margin-left: -22px;
-      display: flex; justify-content: center; align-items: center;
-      transform-origin: top center;
+      border: 3px solid #d4af37; box-shadow: -2px 4px 10px rgba(0,0,0,0.65);
+      display: flex; justify-content: center; align-items: center; transform-origin: top center;
     }
-    .enemy-card-back::after {
-      content: '🌀'; font-size: 26px; filter: drop-shadow(0 0 4px #00e5ff);
-    }
-
-    /* ================= 英雄拱门头像框（上下居中对称） ================= */
+    .enemy-card-back::after { content: '🌀'; font-size: 26px; filter: drop-shadow(0 0 4px #00e5ff); }
+    
+    /* 英雄头像框 */
     .hero-frame {
       position: absolute; left: 50%; transform: translateX(-50%);
-      width: 126px; height: 145px;
-      /* 经典上圆下方的炉石拱门造型 */
-      border-radius: 65px 65px 14px 14px;
-      background: linear-gradient(180deg, #4e342e, #271815);
-      border: 6px solid #b8860b;
+      width: 126px; height: 145px; border-radius: 65px 65px 14px 14px;
+      background: linear-gradient(180deg, #4e342e, #271815); border: 6px solid #b8860b;
       box-shadow: 0 8px 25px rgba(0,0,0,0.8), inset 0 0 15px #000;
-      display: flex; flex-direction: column; justify-content: center; align-items: center;
-      z-index: 15;
+      display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 15;
+      transition: box-shadow 0.2s; /* 为受击闪红光做铺垫 */
     }
     #enemy-hero { top: 18px; }
-    #my-hero { bottom: 155px; } /* 留出最底下给扇形手牌 */
-
+    #my-hero { bottom: 155px; }
     .hero-emoji { font-size: 62px; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.6)); }
     .hero-name-banner {
-      position: absolute; bottom: -12px;
-      background: linear-gradient(90deg, #3e2723, #5d4037, #3e2723);
-      color: #ffe082; font-size: 12px; font-weight: bold;
-      padding: 3px 14px; border-radius: 10px; border: 2px solid #d4af37;
-      white-space: nowrap; box-shadow: 0 3px 6px rgba(0,0,0,0.6);
+      position: absolute; bottom: -12px; background: linear-gradient(90deg, #3e2723, #5d4037, #3e2723);
+      color: #ffe082; font-size: 12px; font-weight: bold; padding: 3px 14px; border-radius: 10px; border: 2px solid #d4af37;
     }
-
-    /* 🩸 英雄右下角的红色血滴宝石 */
     .hp-badge {
-      position: absolute; bottom: -8px; right: -22px;
-      width: 50px; height: 58px;
+      position: absolute; bottom: -8px; right: -22px; width: 50px; height: 58px;
       background: radial-gradient(circle at 35% 35%, #ff5252, #b71c1c 70%, #5f0909);
-      border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
-      border: 3px solid #ffd54f;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.85);
-      display: flex; justify-content: center; align-items: center;
-      color: #fff; font-size: 22px; font-weight: 900;
-      text-shadow: 0 2px 4px #000, 0 0 6px #000;
-      z-index: 20;
+      border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%; border: 3px solid #ffd54f;
+      display: flex; justify-content: center; align-items: center; color: #fff; font-size: 22px; font-weight: 900; z-index: 20;
     }
-
-    /* 英雄身旁的 Debuff 气泡（大水/大睡预告） */
-    .hero-debuffs {
-      position: absolute; left: -125px; top: 35px;
-      display: flex; flex-direction: column; gap: 6px; width: 115px; align-items: flex-end;
-    }
-    .debuff-pill {
-      padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 900;
-      box-shadow: 0 3px 8px rgba(0,0,0,0.6); animation: popIn 0.25s ease-out;
-    }
+    .hero-debuffs { position: absolute; left: -125px; top: 35px; display: flex; flex-direction: column; gap: 6px; width: 115px; align-items: flex-end; }
+    .debuff-pill { padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 900; }
     .pill-flood { background: #004d80; color: #00e5ff; border: 2px solid #00e5ff; }
     .pill-sleep { background: #4a0072; color: #ea80fc; border: 2px solid #ea80fc; }
 
-    /* ================= 左侧大图悬停预览区（还原截图左侧神圣之灵效果！） ================= */
-    #hover-preview {
-      position: absolute; left: 28px; top: 44%; transform: translateY(-50%);
-      width: 200px; height: 290px; z-index: 80;
-      pointer-events: none; display: none;
+    /* ================= 视觉特效 CSS 核心区 ================= */
+    
+    /* 1. 受击剧烈震屏 + 闪烁红光（保持居中 translateX(-50%) 不丢） */
+    @keyframes heroShake {
+      0% { transform: translateX(-50%) translate(3px, 3px) rotate(0deg); box-shadow: 0 0 40px red; border-color: #ff1744; }
+      20% { transform: translateX(-50%) translate(-3px, -2px) rotate(-2deg); }
+      40% { transform: translateX(-50%) translate(-3px, 3px) rotate(1deg); }
+      60% { transform: translateX(-50%) translate(3px, -2px) rotate(0deg); box-shadow: 0 0 20px red; }
+      80% { transform: translateX(-50%) translate(1px, 2px) rotate(-1deg); }
+      100% { transform: translateX(-50%) translate(0, 0) rotate(0deg); border-color: #b8860b; box-shadow: 0 8px 25px rgba(0,0,0,0.8); }
     }
-    #hover-preview .hs-card {
-      width: 100%; height: 100%; transform: none !important;
-      box-shadow: 0 20px 50px rgba(0,0,0,0.85);
+    .fx-shake { animation: heroShake 0.4s cubic-bezier(.36,.07,.19,.97) both !important; }
+
+    /* 2. 鲜血飘字特效 */
+    .fx-damage-text {
+      position: absolute; font-size: 38px; font-weight: 900; color: #ff1744;
+      text-shadow: 0 0 10px #000, 0 0 20px #ff0000, 2px 3px 0px #000;
+      pointer-events: none; z-index: 9999;
+      animation: floatUpAndFade 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
     }
+    @keyframes floatUpAndFade {
+      0% { transform: translateY(0) scale(0.5); opacity: 0; }
+      15% { transform: translateY(-30px) scale(1.3); opacity: 1; }
+      100% { transform: translateY(-90px) scale(1); opacity: 0; }
+    }
+
+    /* 3. 炎弹：火球飞行拖尾特效 */
+    .fx-fireball {
+      position: absolute; width: 24px; height: 24px; border-radius: 50%;
+      background: radial-gradient(circle, #fff, #ffeb3b 30%, #ff5722 80%);
+      box-shadow: 0 0 20px #ffeb3b, 0 0 40px #ff5722;
+      pointer-events: none; z-index: 9998;
+      transition: all 0.35s cubic-bezier(0.5, 0.1, 0.8, 1); /* 加速曲线模拟投掷 */
+    }
+    .fx-fireball::after {
+      content: ''; position: absolute; top: -10px; left: -10px; right: -10px; bottom: -10px;
+      background: #ff5722; filter: blur(12px); z-index: -1; border-radius: 50%;
+    }
+
+    /* 4. 黑闪：扭曲黑洞与大十字斩 */
+    .fx-black-burst {
+      position: absolute; width: 200px; height: 200px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(0,0,0,1) 20%, rgba(255,23,68,0.8) 60%, transparent 80%);
+      mix-blend-mode: hard-light; pointer-events: none; z-index: 9997;
+      animation: blackBurst 0.5s ease-out forwards;
+    }
+    .fx-black-slash {
+      position: absolute; width: 280px; height: 16px; background: #fff;
+      box-shadow: 0 0 20px #ff1744, 0 0 40px #ff1744;
+      pointer-events: none; z-index: 9998;
+      animation: blackSlash 0.35s ease-in-out forwards;
+    }
+    @keyframes blackBurst { 0% { transform: scale(0.2); opacity: 1; } 100% { transform: scale(2.5); opacity: 0; } }
+    @keyframes blackSlash {
+      0% { transform: rotate(-35deg) scaleX(0); opacity: 1; }
+      50% { transform: rotate(-35deg) scaleX(1); opacity: 1; }
+      100% { transform: rotate(-35deg) scaleX(1); opacity: 0; }
+    }
+
+    /* ================= 实体卡牌等保留样式 ================= */
+    #hover-preview { position: absolute; left: 28px; top: 44%; transform: translateY(-50%); width: 200px; height: 290px; z-index: 80; pointer-events: none; display: none; }
+    #hover-preview .hs-card { width: 100%; height: 100%; transform: none !important; box-shadow: 0 20px 50px rgba(0,0,0,0.85); }
     #hover-preview .card-cost-gem { width: 46px; height: 46px; font-size: 26px; top: -12px; left: -12px; }
     #hover-preview .card-portrait { height: 115px; font-size: 64px; }
     #hover-preview .card-ribbon { font-size: 19px; padding: 5px 0; }
     #hover-preview .card-text-box { font-size: 14px; padding: 12px 10px; }
 
-    /* ================= 右侧中线：炉石结束回合按钮 ================= */
-    #end-turn-btn {
-      position: absolute; right: 92px; top: 50%; transform: translateY(-50%);
-      width: 116px; height: 52px; border-radius: 26px;
-      font-size: 16px; font-weight: 900; cursor: pointer; z-index: 30;
-      transition: all 0.15s;
-    }
-    .turn-mine {
-      background: linear-gradient(180deg, #8bc34a, #33691e);
-      color: #fff; border: 4px solid #ffd54f;
-      box-shadow: 0 5px 0 #1b5e20, 0 0 25px rgba(139, 195, 74, 0.8);
-      text-shadow: 0 2px 2px #000;
-    }
-    .turn-mine:hover { filter: brightness(1.1); }
+    #end-turn-btn { position: absolute; right: 92px; top: 50%; transform: translateY(-50%); width: 116px; height: 52px; border-radius: 26px; font-size: 16px; font-weight: 900; cursor: pointer; z-index: 30; }
+    .turn-mine { background: linear-gradient(180deg, #8bc34a, #33691e); color: #fff; border: 4px solid #ffd54f; box-shadow: 0 5px 0 #1b5e20, 0 0 25px rgba(139, 195, 74, 0.8); }
     .turn-mine:active { transform: translateY(-44%); box-shadow: 0 2px 0 #1b5e20; }
-    .turn-enemy {
-      background: linear-gradient(180deg, #8d6e63, #4e342e);
-      color: #bcaaa4; border: 4px solid #5d4037;
-      box-shadow: inset 0 3px 6px rgba(0,0,0,0.6); cursor: not-allowed;
-    }
+    .turn-enemy { background: linear-gradient(180deg, #8d6e63, #4e342e); color: #bcaaa4; border: 4px solid #5d4037; cursor: not-allowed; }
 
-    /* ================= 最右侧：竖排法力水晶柱（还原截图右侧水晶槽！） ================= */
-    #mana-tray {
-      position: absolute; right: 16px; top: 50%; transform: translateY(-50%);
-      width: 58px; padding: 16px 8px;
-      background: linear-gradient(90deg, #271815, #3e2723, #271815);
-      border: 3px solid #8d6e63; border-radius: 30px;
-      box-shadow: inset 0 0 15px #000, 0 6px 20px rgba(0,0,0,0.7);
-      display: flex; flex-direction: column; align-items: center; gap: 10px;
-      z-index: 30;
-    }
-    .mana-gem {
-      width: 30px; height: 30px; border-radius: 50%;
-      background: radial-gradient(circle at 30% 30%, #80d8ff, #0091ea 60%, #01579b);
-      border: 2px solid #e1f5fe;
-      box-shadow: 0 0 12px #00e5ff;
-      transition: all 0.2s;
-    }
-    .mana-gem.empty {
-      background: radial-gradient(circle, #263238, #11171a);
-      border-color: #455a64; box-shadow: inset 0 2px 5px #000;
-    }
-    #mana-num {
-      color: #fff; font-size: 18px; font-weight: 900;
-      text-shadow: 0 2px 4px #000; margin-top: 4px;
-    }
+    #mana-tray { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); width: 58px; padding: 16px 8px; background: linear-gradient(90deg, #271815, #3e2723, #271815); border: 3px solid #8d6e63; border-radius: 30px; box-shadow: inset 0 0 15px #000; display: flex; flex-direction: column; align-items: center; gap: 10px; z-index: 30; }
+    .mana-gem { width: 30px; height: 30px; border-radius: 50%; background: radial-gradient(circle at 30% 30%, #80d8ff, #0091ea 60%, #01579b); border: 2px solid #e1f5fe; box-shadow: 0 0 12px #00e5ff; }
+    .mana-gem.empty { background: radial-gradient(circle, #263238, #11171a); border-color: #455a64; box-shadow: inset 0 2px 5px #000; }
+    #mana-num { color: #fff; font-size: 18px; font-weight: 900; text-shadow: 0 2px 4px #000; margin-top: 4px; }
 
-    /* ================= 底部中央：我方扇形手牌区 ================= */
-    #my-hand {
-      position: absolute; bottom: -28px; left: 50%; transform: translateX(-50%);
-      display: flex; justify-content: center; align-items: flex-end;
-      height: 220px; z-index: 40;
-    }
-
-    /* 🃏 炉石质感实体卡牌 */
-    .hs-card {
-      width: 138px; height: 198px; border-radius: 12px;
-      background: linear-gradient(160deg, #6d4c41, #3e2723);
-      border: 3px solid #d4af37;
-      padding: 8px; position: relative;
-      display: flex; flex-direction: column; justify-content: space-between;
-      cursor: pointer; margin: 0 -10px;
-      box-shadow: -4px 6px 16px rgba(0,0,0,0.75);
-      transform-origin: bottom center;
-      transition: transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.18s;
-    }
-    /* 可打出的手牌泛起翠绿荧光外框（经典炉石绿框提示！） */
-    .hs-card.playable {
-      border-color: #69f0ae;
-      box-shadow: 0 0 18px rgba(105, 240, 174, 0.75), -4px 6px 16px rgba(0,0,0,0.75);
-    }
-    .hs-card.unplayable {
-      filter: brightness(0.75) saturate(0.7);
-    }
-    /* 鼠标悬停手牌：无视扇形倾角，筆直向上抽出放大！ */
-    .hs-card:hover {
-      transform: translateY(-48px) scale(1.18) rotate(0deg) !important;
-      z-index: 90 !important;
-      box-shadow: 0 18px 35px rgba(0,0,0,0.9), 0 0 25px #ffd54f;
-    }
-
-    /* 左上角蓝宝石费用 */
-    .card-cost-gem {
-      position: absolute; top: -9px; left: -9px;
-      width: 34px; height: 34px;
-      background: radial-gradient(circle at 35% 35%, #40c4ff, #0277bd 70%, #003c8f);
-      border: 2px solid #ffd54f; border-radius: 50%;
-      color: #fff; font-size: 19px; font-weight: 900;
-      display: flex; justify-content: center; align-items: center;
-      text-shadow: 0 2px 3px #000; box-shadow: 0 3px 6px rgba(0,0,0,0.7);
-      z-index: 5;
-    }
-    /* 卡牌椭圆插画窗 */
-    .card-portrait {
-      height: 82px; border-radius: 50% 50% 12px 12px / 35% 35% 12px 12px;
-      background: radial-gradient(circle, #444, #111);
-      border: 2px solid #b8860b;
-      display: flex; justify-content: center; align-items: center;
-      font-size: 44px; box-shadow: inset 0 0 12px #000;
-    }
-    /* 中间卷轴卡名横幅 */
-    .card-ribbon {
-      background: linear-gradient(90deg, #8d6e63, #efebe9, #8d6e63);
-      color: #271815; font-weight: 900; font-size: 14px;
-      text-align: center; padding: 3px 0; border-radius: 6px;
-      border: 1px solid #4e342e; margin-top: -8px; z-index: 3;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.5);
-    }
-    /* 底部羊皮纸描述框 */
-    .card-text-box {
-      flex: 1; margin-top: 4px;
-      background: #e6d2b5; color: #2b1d0e;
-      border-radius: 6px; border: 1px solid #8d6e63;
-      padding: 6px 5px; font-size: 11px; font-weight: 600;
-      text-align: center; display: flex; justify-content: center; align-items: center;
-      line-height: 1.25; box-shadow: inset 0 1px 4px rgba(0,0,0,0.35);
-    }
-
-    /* 四种卡牌的不同插画底色 */
+    #my-hand { position: absolute; bottom: -28px; left: 50%; transform: translateX(-50%); display: flex; justify-content: center; align-items: flex-end; height: 220px; z-index: 40; }
+    .hs-card { width: 138px; height: 198px; border-radius: 12px; background: linear-gradient(160deg, #6d4c41, #3e2723); border: 3px solid #d4af37; padding: 8px; position: relative; display: flex; flex-direction: column; justify-content: space-between; cursor: pointer; margin: 0 -10px; box-shadow: -4px 6px 16px rgba(0,0,0,0.75); transform-origin: bottom center; transition: transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1); }
+    .hs-card.playable { border-color: #69f0ae; box-shadow: 0 0 18px rgba(105, 240, 174, 0.75), -4px 6px 16px rgba(0,0,0,0.75); }
+    .hs-card.unplayable { filter: brightness(0.75) saturate(0.7); }
+    .hs-card:hover { transform: translateY(-48px) scale(1.18) rotate(0deg) !important; z-index: 90 !important; }
+    .card-cost-gem { position: absolute; top: -9px; left: -9px; width: 34px; height: 34px; background: radial-gradient(circle at 35% 35%, #40c4ff, #0277bd 70%, #003c8f); border: 2px solid #ffd54f; border-radius: 50%; color: #fff; font-size: 19px; font-weight: 900; display: flex; justify-content: center; align-items: center; z-index: 5; }
+    .card-portrait { height: 82px; border-radius: 50% 50% 12px 12px / 35% 35% 12px 12px; border: 2px solid #b8860b; display: flex; justify-content: center; align-items: center; font-size: 44px; box-shadow: inset 0 0 12px #000; }
+    .card-ribbon { background: linear-gradient(90deg, #8d6e63, #efebe9, #8d6e63); color: #271815; font-weight: 900; font-size: 14px; text-align: center; padding: 3px 0; border-radius: 6px; border: 1px solid #4e342e; margin-top: -8px; z-index: 3; }
+    .card-text-box { flex: 1; margin-top: 4px; background: #e6d2b5; color: #2b1d0e; border-radius: 6px; border: 1px solid #8d6e63; padding: 6px 5px; font-size: 11px; font-weight: 600; text-align: center; display: flex; justify-content: center; align-items: center; line-height: 1.25; }
     .art-damage { background: radial-gradient(circle, #ff7043, #bf360c); }
     .art-black-flash { background: radial-gradient(circle, #ff1744, #1a0005); }
     .art-flood { background: radial-gradient(circle, #00e5ff, #003366); }
     .art-sleep { background: radial-gradient(circle, #ea80fc, #311b92); }
 
-    /* ================= 战场中央特效通知与黑闪 QTE ================= */
-    #center-arena {
-      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-      z-index: 50; display: flex; flex-direction: column; align-items: center;
-      pointer-events: none;
-    }
-    #arena-toast {
-      font-size: 28px; font-weight: 900; color: #fff;
-      text-shadow: 0 0 15px #000, 0 3px 6px #000;
-      background: rgba(30, 18, 10, 0.82); border: 2px solid #d4af37;
-      padding: 8px 26px; border-radius: 25px; margin-bottom: 12px;
-    }
+    #center-arena { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 50; display: flex; flex-direction: column; align-items: center; pointer-events: none; }
+    #arena-toast { font-size: 28px; font-weight: 900; color: #fff; text-shadow: 0 0 15px #000, 0 3px 6px #000; background: rgba(30, 18, 10, 0.82); border: 2px solid #d4af37; padding: 8px 26px; border-radius: 25px; margin-bottom: 12px; }
+    #qte-modal { display: none; pointer-events: auto; padding: 18px 28px; background: rgba(15, 0, 5, 0.95); border: 3px solid #ff1744; border-radius: 14px; text-align: center; box-shadow: 0 0 40px rgba(255, 23, 68, 0.85); }
+    #qte-bar { position: relative; width: 360px; height: 28px; background: #222; margin: 12px auto; border-radius: 14px; overflow: hidden; border: 2px solid #777; }
+    #qte-target { position: absolute; left: 40%; width: 20%; height: 100%; background: #ff1744; box-shadow: 0 0 12px #ff1744; }
+    #qte-pointer { position: absolute; left: 0%; width: 6px; height: 100%; background: #fff; box-shadow: 0 0 8px #fff; }
+    .btn-strike { background: #ff1744; color: white; font-size: 18px; font-weight: 900; padding: 8px 30px; border-radius: 8px; border: 2px solid #fff; cursor: pointer; box-shadow: 0 0 15px #ff1744; }
 
-    /* ⚡ 黑闪 QTE 弹窗 */
-    #qte-modal {
-      display: none; pointer-events: auto;
-      padding: 18px 28px; background: rgba(15, 0, 5, 0.95); 
-      border: 3px solid #ff1744; border-radius: 14px; text-align: center;
-      box-shadow: 0 0 40px rgba(255, 23, 68, 0.85);
-    }
-    #qte-bar {
-      position: relative; width: 360px; height: 28px; background: #222; 
-      margin: 12px auto; border-radius: 14px; overflow: hidden; border: 2px solid #777;
-    }
-    #qte-target {
-      position: absolute; left: 40%; width: 20%; height: 100%; 
-      background: #ff1744; box-shadow: 0 0 12px #ff1744;
-    }
-    #qte-pointer {
-      position: absolute; left: 0%; width: 6px; height: 100%; 
-      background: #fff; box-shadow: 0 0 8px #fff;
-    }
-    .btn-strike {
-      background: #ff1744; color: white; font-size: 18px; font-weight: 900;
-      padding: 8px 30px; border-radius: 8px; border: 2px solid #fff; cursor: pointer;
-      box-shadow: 0 0 15px #ff1744;
-    }
-
-    /* 左下角小巧半透明战斗记录 */
-    #mini-log {
-      position: absolute; bottom: 12px; left: 16px;
-      width: 260px; height: 115px; background: rgba(0, 0, 0, 0.55);
-      border: 1px solid rgba(212, 175, 55, 0.4); border-radius: 8px; padding: 8px;
-      overflow-y: auto; font-size: 11px; color: #ddd; line-height: 1.45; z-index: 30;
-    }
-    .msg { color: #a5d6a7; }
-    .err { color: #ef9a9a; }
-    .flood-msg { color: #80d8ff; font-weight: bold; }
-    .sleep-msg { color: #ea80fc; font-weight: bold; }
-
-    /* 🌊 全屏被水淹没的溺水特效层 */
-    #water-overlay {
-      display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-      background: linear-gradient(180deg, rgba(0, 105, 180, 0.35) 0%, rgba(0, 40, 90, 0.75) 100%);
-      box-shadow: inset 0 0 100px #00e5ff; z-index: 999; pointer-events: none;
-      flex-direction: column; justify-content: center; align-items: center;
-    }
-    #big-countdown {
-      font-size: 150px; font-weight: 900; color: #00e5ff;
-      text-shadow: 0 0 30px #00e5ff, 0 0 60px #004d80, 4px 4px 0px #000; line-height: 1;
-    }
-    #water-warning-text {
-      font-size: 26px; font-weight: bold; color: #fff; text-shadow: 0 0 10px #000;
-      margin-top: 10px; background: rgba(0, 0, 0, 0.5); padding: 8px 24px; border-radius: 20px;
-    }
-
-    /* 💤 全屏沉睡梦魇特效层 */
-    #sleep-overlay {
-      display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-      background: radial-gradient(circle, rgba(60, 0, 110, 0.88) 0%, rgba(10, 0, 25, 0.96) 100%);
-      box-shadow: inset 0 0 120px #aa00ff; z-index: 1000; pointer-events: auto;
-      flex-direction: column; justify-content: center; align-items: center;
-    }
-    #sleep-zzz {
-      font-size: 80px; font-weight: 900; color: #e040fb;
-      text-shadow: 0 0 25px #aa00ff, 0 0 50px #000; margin-bottom: 10px;
-    }
-    #sleep-timer-text {
-      font-size: 24px; color: #ffb74d; font-weight: bold; margin-bottom: 25px;
-    }
-    #btn-struggle {
-      background: linear-gradient(135deg, #aa00ff, #ff007f); color: #fff;
-      font-size: 26px; font-weight: 900; padding: 20px 42px; border-radius: 50px;
-      border: 4px solid #fff; box-shadow: 0 0 30px #e040fb, 0 8px 0 #4a0072; cursor: pointer;
-    }
+    #mini-log { position: absolute; bottom: 12px; left: 16px; width: 260px; height: 115px; background: rgba(0, 0, 0, 0.55); border: 1px solid rgba(212, 175, 55, 0.4); border-radius: 8px; padding: 8px; overflow-y: auto; font-size: 11px; color: #ddd; line-height: 1.45; z-index: 30; }
+    
+    #water-overlay { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: linear-gradient(180deg, rgba(0, 105, 180, 0.35) 0%, rgba(0, 40, 90, 0.75) 100%); box-shadow: inset 0 0 100px #00e5ff; z-index: 999; pointer-events: none; flex-direction: column; justify-content: center; align-items: center; }
+    #big-countdown { font-size: 150px; font-weight: 900; color: #00e5ff; text-shadow: 0 0 30px #00e5ff, 0 0 60px #004d80, 4px 4px 0px #000; line-height: 1; }
+    #sleep-overlay { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: radial-gradient(circle, rgba(60, 0, 110, 0.88) 0%, rgba(10, 0, 25, 0.96) 100%); box-shadow: inset 0 0 120px #aa00ff; z-index: 1000; pointer-events: auto; flex-direction: column; justify-content: center; align-items: center; }
+    #sleep-zzz { font-size: 80px; font-weight: 900; color: #e040fb; text-shadow: 0 0 25px #aa00ff, 0 0 50px #000; margin-bottom: 10px; }
+    #sleep-timer-text { font-size: 24px; color: #ffb74d; font-weight: bold; margin-bottom: 25px; }
+    #btn-struggle { background: linear-gradient(135deg, #aa00ff, #ff007f); color: #fff; font-size: 26px; font-weight: 900; padding: 20px 42px; border-radius: 50px; border: 4px solid #fff; box-shadow: 0 0 30px #e040fb, 0 8px 0 #4a0072; cursor: pointer; }
     #btn-struggle:active { transform: scale(0.92) translateY(4px); }
   </style>
 </head>
 <body>
 
-  <!-- 🌊 全屏被水淹没特效 -->
-  <div id="water-overlay">
-    <div id="big-countdown">6</div>
-    <div id="water-warning-text">🌊 正在被大水淹没！快出牌！！ 🌊</div>
-  </div>
-
-  <!-- 💤 全屏大睡挣扎特效（5秒狂按 25 次惊醒） -->
+  <!-- 各种全屏特效层 -->
+  <div id="water-overlay"><div id="big-countdown">6</div><div style="font-size:26px;font-weight:bold;margin-top:10px;background:rgba(0,0,0,0.5);padding:8px 24px;border-radius:20px;">🌊 正在被大水淹没！</div></div>
   <div id="sleep-overlay">
     <div id="sleep-zzz">💤 陷入沉睡 Zzz...</div>
-    <div id="sleep-timer-text">⚠️ 距离彻底睡死跳过回合还剩：<span id="sleep-countdown">5.0</span> 秒！</div>
-    <button id="btn-struggle" onclick="handleStruggleClick()">
-      💥 狂按咬舌尖惊醒！(<span id="struggle-count">0</span> / 25) 💥
-    </button>
-    <div style="margin-top: 15px; color: #ccc; font-size: 15px;">（注：强行挣脱催眠将受到 8 点反噬伤害，不按则直接跳过本回合！）</div>
+    <div id="sleep-timer-text">⚠️ 距离彻底睡死还剩：<span id="sleep-countdown">5.0</span> 秒！</div>
+    <button id="btn-struggle" onclick="handleStruggleClick()">💥 狂按咬舌尖惊醒！(<span id="struggle-count">0</span> / 25) 💥</button>
   </div>
 
-  <!-- ================= 炉石沙盘主战场 ================= -->
   <div id="board">
     <div id="board-center-line"></div>
-
-    <!-- 左上角连接按钮与状态 -->
-    <div id="top-bar">
-      <button id="btn-connect" class="btn-connect" onclick="connectServer()">🔌 连接牌桌</button>
-      <div id="player-tag">未连接服务器</div>
-    </div>
-
-    <!-- 1. 左上角：对手的扇形卡背 -->
+    <div id="top-bar"><button id="btn-connect" class="btn-connect" onclick="connectServer()">🔌 连接牌桌</button><div id="player-tag">未连接</div></div>
+    
     <div id="enemy-hand"></div>
-
-    <!-- 2. 正上方：对手英雄拱门头像 + 右下角血滴 -->
     <div id="enemy-hero" class="hero-frame">
-      <div id="enemy-debuffs" class="hero-debuffs"></div>
-      <div class="hero-emoji">😈</div>
-      <div id="enemy-name" class="hero-name-banner">等待对手...</div>
-      <div id="enemy-hp" class="hp-badge">100</div>
+      <div id="enemy-debuffs" class="hero-debuffs"></div><div class="hero-emoji">😈</div>
+      <div id="enemy-name" class="hero-name-banner">等待对手...</div><div id="enemy-hp" class="hp-badge">100</div>
     </div>
-
-    <!-- 3. 左侧：鼠标悬停手牌时的超清大图预览区（还原截图左侧！） -->
+    
     <div id="hover-preview"></div>
-
-    <!-- 4. 战场正中央：回合提示与黑闪 QTE -->
     <div id="center-arena">
       <div id="arena-toast">点击左上角【连接牌桌】开始对战</div>
-
       <div id="qte-modal">
-        <div style="color: #ff1744; font-weight: bold; font-size: 16px;">⚡ 【黑闪】在白线进入红区时按下斩击！ ⚡</div>
-        <div id="qte-bar">
-          <div id="qte-target"></div>
-          <div id="qte-pointer"></div>
-        </div>
+        <div style="color: #ff1744; font-weight: bold; font-size: 16px;">⚡ 【黑闪】在白线进入红区时按下！ ⚡</div>
+        <div id="qte-bar"><div id="qte-target"></div><div id="qte-pointer"></div></div>
         <button class="btn-strike" onclick="confirmBlackFlash()">⚡ 斩击！(Strike)</button>
       </div>
     </div>
 
-    <!-- 5. 右侧中线：结束回合 / 对手回合 按钮 -->
     <button id="end-turn-btn" class="turn-enemy" onclick="endTurn()" disabled>对手回合</button>
+    <div id="mana-tray"><div id="gem-3" class="mana-gem empty"></div><div id="gem-2" class="mana-gem empty"></div><div id="gem-1" class="mana-gem empty"></div><div id="mana-num">0/3</div></div>
 
-    <!-- 6. 最右侧：竖排蓝宝石法力水晶槽 -->
-    <div id="mana-tray">
-      <div id="gem-3" class="mana-gem empty"></div>
-      <div id="gem-2" class="mana-gem empty"></div>
-      <div id="gem-1" class="mana-gem empty"></div>
-      <div id="mana-num">0/3</div>
-    </div>
-
-    <!-- 7. 正下方（手牌上方）：我方英雄拱门头像 + 右下角血滴 -->
     <div id="my-hero" class="hero-frame">
-      <div id="my-debuffs" class="hero-debuffs"></div>
-      <div class="hero-emoji">🧙‍♂️</div>
-      <div id="my-name" class="hero-name-banner">我方英雄</div>
-      <div id="my-hp" class="hp-badge">100</div>
+      <div id="my-debuffs" class="hero-debuffs"></div><div class="hero-emoji">🧙‍♂️</div>
+      <div id="my-name" class="hero-name-banner">我方英雄</div><div id="my-hp" class="hp-badge">100</div>
     </div>
-
-    <!-- 8. 最底部：我方扇形弧度手牌区 -->
+    
     <div id="my-hand"></div>
-
-    <!-- 左下角迷你战报日志 -->
     <div id="mini-log"></div>
   </div>
 
@@ -435,227 +227,231 @@
     let pointerPos = 0;
     let direction = 1;
     let pendingCardId = null;
-
+    
     let floodIntervalId = null;
     let sleepIntervalId = null;
     let struggleClicks = 0;
-    const REQUIRED_STRUGGLE_CLICKS = 25;
 
     const logDiv = document.getElementById('mini-log');
-    const myHandDiv = document.getElementById('my-hand');
-    const enemyHandDiv = document.getElementById('enemy-hand');
-    const hoverPreview = document.getElementById('hover-preview');
-    const arenaToast = document.getElementById('arena-toast');
-    const endTurnBtn = document.getElementById('end-turn-btn');
-    const btnConnect = document.getElementById('btn-connect');
-    const playerTag = document.getElementById('player-tag');
-
-    const qteModal = document.getElementById('qte-modal');
-    const qtePointer = document.getElementById('qte-pointer');
-    const waterOverlay = document.getElementById('water-overlay');
-    const bigCountdown = document.getElementById('big-countdown');
-    const sleepOverlay = document.getElementById('sleep-overlay');
-    const sleepCountdownSpan = document.getElementById('sleep-countdown');
-    const struggleCountSpan = document.getElementById('struggle-count');
-
-    function log(msg, className = '') {
-      logDiv.innerHTML += `<div class="${className}">• ${msg}</div>`;
-      logDiv.scrollTop = logDiv.scrollHeight;
-    }
+    
+    function log(msg) { logDiv.innerHTML += `<div>• ${msg}</div>`; logDiv.scrollTop = logDiv.scrollHeight; }
 
     function connectServer() {
       ws = new WebSocket('ws://localhost:8080');
-      ws.onopen = () => {
-        log('已连上酒馆牌桌，等待对手入座...', 'msg');
-        btnConnect.style.display = 'none';
-        arenaToast.innerText = '⏳ 等待第二位玩家连接...';
-      };
+      ws.onopen = () => { document.getElementById('btn-connect').style.display = 'none'; document.getElementById('arena-toast').innerText = '⏳ 等待第二位玩家连接...'; };
       
       ws.onmessage = (e) => {
         const response = JSON.parse(e.data);
-        
         if (response.type === 'SYSTEM') {
           const match = response.message.match(/Player_(p\d+)/);
-          if (match) {
-            myPlayerId = match[1];
-            playerTag.innerText = `👤 我方身份: Player_${myPlayerId}`;
-          }
+          if (match) { myPlayerId = match[1]; document.getElementById('player-tag').innerText = `👤 ${myPlayerId}`; }
         } 
-        else if (response.type === 'ERROR') {
-          log(`❌ ${response.message}`, 'err');
-        }
         else if (response.type === 'STATE_UPDATE') {
-          const state = response.data;
-          const isNewTurn = (state.turn !== lastTurnNumber);
-          lastTurnNumber = state.turn;
-          currentIsMyTurn = (state.currentTurnPlayerId === myPlayerId);
-
-          if (!currentIsMyTurn) {
-            qteModal.style.display = 'none';
-            if (qteAnimationId) cancelAnimationFrame(qteAnimationId);
-          }
-
-          if (!state.isCurrentPlayerSleeping || !currentIsMyTurn) {
-            stopSleepUI();
-          }
-
-          if (isNewTurn) {
-            startFloodCountdownUI(state.turnTimeLimit, currentIsMyTurn);
-            if (state.isCurrentPlayerSleeping) {
-              startSleepStruggleUI(currentIsMyTurn);
-            }
-          }
-
-          // 更新右侧结束回合按钮与中央提示
-          if (state.state === 'PLAYING') {
-            if (currentIsMyTurn) {
-              arenaToast.innerText = `⚔️ 第 ${state.turn} 回合 · 你的回合`;
-              endTurnBtn.innerText = '结束回合';
-              endTurnBtn.className = 'turn-mine';
-              endTurnBtn.disabled = false;
-            } else {
-              arenaToast.innerText = `🛡️ 第 ${state.turn} 回合 · 对手回合`;
-              endTurnBtn.innerText = '对手回合';
-              endTurnBtn.className = 'turn-enemy';
-              endTurnBtn.disabled = true;
-            }
-          }
-
-          const me = state.players.find(p => p.id === myPlayerId);
-          const enemy = state.players.find(p => p.id !== myPlayerId);
-
-          if (me) {
-            currentMyMana = me.mana;
-            updateHero('my', me);
-            updateManaTray(me.mana, me.maxMana);
-            renderMyFanHand(me.hand, currentIsMyTurn, me.mana);
-          }
-          if (enemy) {
-            updateHero('enemy', enemy);
-            renderEnemyFanBacks(enemy.hand ? enemy.hand.length : 0);
-          }
-
-          if (state.state === 'ENDED') {
-            clearInterval(floodIntervalId);
-            waterOverlay.style.display = 'none';
-            stopSleepUI();
-            endTurnBtn.disabled = true;
-            const iWon = me && me.hp > 0;
-            arenaToast.innerText = iWon ? '🏆 胜利！VICTORY！' : '💀 战败... DEFEAT';
-          }
+          handleStateUpdate(response.data);
         }
-      };
-      
-      ws.onerror = () => log('❌ 连接失败，请确认终端 node index.js 正在运行！', 'err');
-      ws.onclose = () => {
-        log('🔌 连接已断开');
-        btnConnect.style.display = 'block';
+        else if (response.type === 'ACTION') {
+          handleActionAnim(response.data); // 👈 核心：触发动画
+        }
       };
     }
 
-    // 更新英雄头像框、右下角血滴与 Debuff 标签
+    // ================= 动画特效引擎 =================
+
+    // 1. 基础受击震动 + 飘字
+    function playHitReaction(targetEl, damageValue, isCrit = false, isMiss = false) {
+      // 触发震屏
+      if (damageValue > 0 || isCrit) {
+        targetEl.classList.remove('fx-shake');
+        void targetEl.offsetWidth; // 强制重绘
+        targetEl.classList.add('fx-shake');
+        setTimeout(() => targetEl.classList.remove('fx-shake'), 400);
+      }
+
+      // 创建飘字
+      const text = document.createElement('div');
+      text.className = 'fx-damage-text';
+      if (isMiss) {
+        text.innerText = '闪避 / Miss'; text.style.color = '#ccc'; text.style.fontSize = '24px';
+      } else {
+        text.innerText = isCrit ? `-${damageValue}!!` : `-${damageValue}`;
+        if (isCrit) { text.style.fontSize = '55px'; text.style.textShadow = '0 0 20px #000, 0 0 40px #ff0000'; }
+      }
+
+      const rect = targetEl.getBoundingClientRect();
+      text.style.left = (rect.left + rect.width / 2 - 20) + 'px';
+      text.style.top = (rect.top + rect.height / 2 - 20) + 'px';
+      document.body.appendChild(text);
+      setTimeout(() => text.remove(), 1200);
+    }
+
+    // 2. 炎弹：三连发追踪火球
+    function shootFireballs(sourceEl, targetEl, totalDamage) {
+      const sRect = sourceEl.getBoundingClientRect();
+      const tRect = targetEl.getBoundingClientRect();
+      const startX = sRect.left + sRect.width / 2;
+      const startY = sRect.top + sRect.height / 2;
+      const endX = tRect.left + tRect.width / 2;
+      const endY = tRect.top + tRect.height / 2;
+
+      const fireballs = 3;
+      const dmgBase = Math.floor(totalDamage / 3);
+      const remainder = totalDamage % 3;
+
+      for (let i = 0; i < fireballs; i++) {
+        setTimeout(() => {
+          const fb = document.createElement('div');
+          fb.className = 'fx-fireball';
+          fb.style.left = (startX - 12) + 'px';
+          fb.style.top = (startY - 12) + 'px';
+          document.body.appendChild(fb);
+
+          void fb.offsetWidth; // 必须强制重绘才能触发飞行 transition
+
+          // 给终点加一点随机偏移，模拟散布
+          const offsetX = (Math.random() - 0.5) * 50;
+          const offsetY = (Math.random() - 0.5) * 50;
+          
+          fb.style.left = (endX - 12 + offsetX) + 'px';
+          fb.style.top = (endY - 12 + offsetY) + 'px';
+
+          fb.addEventListener('transitionend', () => {
+            fb.remove();
+            playHitReaction(targetEl, dmgBase + (i === fireballs - 1 ? remainder : 0));
+          });
+        }, i * 180); // 每 0.18 秒射出一发
+      }
+    }
+
+    // 3. 黑闪：扭曲爆发与十字斩
+    function playBlackFlash(targetEl, totalDamage) {
+      const rect = targetEl.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+
+      const burst = document.createElement('div');
+      burst.className = 'fx-black-burst';
+      burst.style.left = (cx - 100) + 'px'; burst.style.top = (cy - 100) + 'px';
+      document.body.appendChild(burst);
+
+      const slash = document.createElement('div');
+      slash.className = 'fx-black-slash';
+      slash.style.left = (cx - 140) + 'px'; slash.style.top = (cy - 8) + 'px';
+      document.body.appendChild(slash);
+
+      setTimeout(() => { burst.remove(); slash.remove(); }, 600);
+      playHitReaction(targetEl, totalDamage, true); // 触发红字暴击震动！
+    }
+
+    // 接收后端的 ACTION 广播并分配给对应的特效函数
+    function handleActionAnim(action) {
+      const isMeAttacking = action.attacker === myPlayerId;
+      const sourceEl = document.getElementById(isMeAttacking ? 'my-hero' : 'enemy-hero');
+      const targetEl = document.getElementById(isMeAttacking ? 'enemy-hero' : 'my-hero');
+
+      if (action.type === 'FIREBALL') {
+        shootFireballs(sourceEl, targetEl, action.value);
+      } 
+      else if (action.type === 'BLACK_FLASH') {
+        if (action.success) {
+          playBlackFlash(targetEl, action.value);
+        } else {
+          playHitReaction(targetEl, 0, false, true); // Miss 效果
+        }
+      }
+      else if (action.type === 'WAKE_UP_DAMAGE') {
+        // 咬舌尖醒来的流血效果
+        const wokeEl = document.getElementById(action.target === myPlayerId ? 'my-hero' : 'enemy-hero');
+        playHitReaction(wokeEl, action.value);
+      }
+    }
+
+    // ================= 原有状态刷新与游戏逻辑 =================
+
+    function handleStateUpdate(state) {
+      const isNewTurn = (state.turn !== lastTurnNumber);
+      lastTurnNumber = state.turn;
+      currentIsMyTurn = (state.currentTurnPlayerId === myPlayerId);
+
+      if (!currentIsMyTurn) {
+        document.getElementById('qte-modal').style.display = 'none';
+        if (qteAnimationId) cancelAnimationFrame(qteAnimationId);
+      }
+
+      if (!state.isCurrentPlayerSleeping || !currentIsMyTurn) stopSleepUI();
+      if (isNewTurn) {
+        startFloodCountdownUI(state.turnTimeLimit, currentIsMyTurn);
+        if (state.isCurrentPlayerSleeping) startSleepStruggleUI(currentIsMyTurn);
+      }
+
+      const toast = document.getElementById('arena-toast');
+      const endBtn = document.getElementById('end-turn-btn');
+      if (state.state === 'PLAYING') {
+        if (currentIsMyTurn) {
+          toast.innerText = `⚔️ 第 ${state.turn} 回合 · 你的回合`;
+          endBtn.innerText = '结束回合'; endBtn.className = 'turn-mine'; endBtn.disabled = false;
+        } else {
+          toast.innerText = `🛡️ 第 ${state.turn} 回合 · 对手思考中`;
+          endBtn.innerText = '对手回合'; endBtn.className = 'turn-enemy'; endBtn.disabled = true;
+        }
+      }
+
+      const me = state.players.find(p => p.id === myPlayerId);
+      const enemy = state.players.find(p => p.id !== myPlayerId);
+      if (me) {
+        currentMyMana = me.mana; updateHero('my', me);
+        document.getElementById('mana-num').innerText = `${me.mana}/${me.maxMana}`;
+        for (let i = 1; i <= 3; i++) document.getElementById(`gem-${i}`).className = (i <= me.mana) ? 'mana-gem' : 'mana-gem empty';
+        renderMyFanHand(me.hand, currentIsMyTurn, me.mana);
+      }
+      if (enemy) {
+        updateHero('enemy', enemy);
+        const count = enemy.hand ? enemy.hand.length : 0;
+        const eHand = document.getElementById('enemy-hand'); eHand.innerHTML = '';
+        const mid = (count - 1) / 2;
+        for (let i = 0; i < count; i++) {
+          const back = document.createElement('div'); back.className = 'enemy-card-back';
+          back.style.transform = `rotate(${(i - mid) * -6}deg) translateY(${Math.abs(i - mid) * 3}px)`;
+          eHand.appendChild(back);
+        }
+      }
+
+      if (state.state === 'ENDED') {
+        clearInterval(floodIntervalId); document.getElementById('water-overlay').style.display = 'none'; stopSleepUI();
+        endBtn.disabled = true; toast.innerText = (me && me.hp > 0) ? '🏆 胜利！VICTORY！' : '💀 战败... DEFEAT';
+      }
+    }
+
     function updateHero(prefix, player) {
       document.getElementById(`${prefix}-name`).innerText = player.name;
       document.getElementById(`${prefix}-hp`).innerText = player.hp;
-
       let debuffs = '';
-      if (player.nextTurnFlooded) {
-        debuffs += `<div class="debuff-pill pill-flood">🌊 下回合限${player.nextTurnFlooded}秒</div>`;
-      }
-      if (player.nextTurnSleep) {
-        debuffs += `<div class="debuff-pill pill-sleep">💤 下回合沉睡</div>`;
-      }
+      if (player.nextTurnFlooded) debuffs += `<div class="debuff-pill pill-flood">🌊 限${player.nextTurnFlooded}秒</div>`;
+      if (player.nextTurnSleep) debuffs += `<div class="debuff-pill pill-sleep">💤 将被催眠</div>`;
       document.getElementById(`${prefix}-debuffs`).innerHTML = debuffs;
     }
 
-    // 更新右侧竖排蓝宝石法力水晶槽
-    function updateManaTray(mana, maxMana) {
-      document.getElementById('mana-num').innerText = `${mana}/${maxMana}`;
-      for (let i = 1; i <= 3; i++) {
-        const gem = document.getElementById(`gem-${i}`);
-        if (gem) {
-          gem.className = (i <= mana) ? 'mana-gem' : 'mana-gem empty';
-        }
-      }
-    }
-
-    // 渲染左上角对手的倒扇形卡背
-    function renderEnemyFanBacks(count) {
-      enemyHandDiv.innerHTML = '';
-      const mid = (count - 1) / 2;
-      for (let i = 0; i < count; i++) {
-        const back = document.createElement('div');
-        back.className = 'enemy-card-back';
-        const angle = (i - mid) * -6;
-        const offsetY = Math.abs(i - mid) * 3;
-        back.style.transform = `rotate(${angle}deg) translateY(${offsetY}px)`;
-        enemyHandDiv.appendChild(back);
-      }
-    }
-
-    // 生成单张炉石卡牌的 HTML 内容
     function buildCardInnerHTML(card) {
-      let artClass = 'art-damage';
-      let icon = '🔥';
-      let desc = `造成 <b>${card.effect.value}</b> 点火焰伤害。`;
-
-      if (card.effect.type === 'BLACK_FLASH') {
-        artClass = 'art-black-flash';
-        icon = '⚡';
-        desc = `<b>空间QTE：</b>命中红区造成 <b>${card.effect.value}</b> 点暴击伤害！`;
-      } else if (card.effect.type === 'FLOOD') {
-        artClass = 'art-flood';
-        icon = '🌊';
-        desc = `使对手下回合出牌时间缩短至 <b>${card.effect.value}秒</b>。`;
-      } else if (card.effect.type === 'SLEEP') {
-        artClass = 'art-sleep';
-        icon = '💤';
-        desc = `使对手沉睡。未在5秒内狂按25次则<b>跳过回合</b>(强醒-${card.effect.value}血)。`;
-      }
-
-      return `
-        <div class="card-cost-gem">${card.cost}</div>
-        <div class="card-portrait ${artClass}">${icon}</div>
-        <div class="card-ribbon">${card.name}</div>
-        <div class="card-text-box"><span>${desc}</span></div>
-      `;
+      let art = 'art-damage', icon = '🔥', desc = `造成 <b>${card.effect.value}</b> 点火焰伤害。`;
+      if (card.effect.type === 'BLACK_FLASH') { art = 'art-black-flash'; icon = '⚡'; desc = `<b>空间QTE：</b>命中红区造成 <b>${card.effect.value}</b> 点暴击伤害！`; }
+      else if (card.effect.type === 'FLOOD') { art = 'art-flood'; icon = '🌊'; desc = `使对手下回合出牌时间缩短至 <b>${card.effect.value}秒</b>。`; }
+      else if (card.effect.type === 'SLEEP') { art = 'art-sleep'; icon = '💤'; desc = `催眠敌方。未在5秒狂按25次则<b>跳过回合</b>(强醒-${card.effect.value}血)。`; }
+      return `<div class="card-cost-gem">${card.cost}</div><div class="card-portrait ${art}">${icon}</div><div class="card-ribbon">${card.name}</div><div class="card-text-box"><span>${desc}</span></div>`;
     }
 
-    // 🃏 渲染底部我方扇形手牌（带弧度旋转 + 左侧大图预览！）
     function renderMyFanHand(hand, isMyTurn, currentMana) {
-      myHandDiv.innerHTML = '';
-      hoverPreview.style.display = 'none';
+      const myHandDiv = document.getElementById('my-hand'); myHandDiv.innerHTML = '';
+      const preview = document.getElementById('hover-preview'); preview.style.display = 'none';
       if (!hand || hand.length === 0) return;
-
       const mid = (hand.length - 1) / 2;
-
       hand.forEach((card, index) => {
         const cardEl = document.createElement('div');
-        const playable = isMyTurn && currentMana >= card.cost;
-        cardEl.className = `hs-card ${playable ? 'playable' : 'unplayable'}`;
-
-        // 计算炉石标志性的扇形旋转角度与拱形高度
-        const rotateDeg = (index - mid) * 5.5;
-        const translateY = Math.abs(index - mid) * 6;
-        cardEl.style.transform = `rotate(${rotateDeg}deg) translateY(${translateY}px)`;
+        cardEl.className = `hs-card ${(isMyTurn && currentMana >= card.cost) ? 'playable' : 'unplayable'}`;
+        cardEl.style.transform = `rotate(${(index - mid) * 5.5}deg) translateY(${Math.abs(index - mid) * 6}px)`;
         cardEl.style.zIndex = 40 + index;
-
         cardEl.innerHTML = buildCardInnerHTML(card);
-
-        // 鼠标移入：在屏幕左侧显示像截图【神圣之灵】那样的放大预览卡！
-        cardEl.onmouseenter = () => {
-          hoverPreview.innerHTML = `<div class="hs-card">${buildCardInnerHTML(card)}</div>`;
-          hoverPreview.style.display = 'block';
-        };
-        cardEl.onmouseleave = () => {
-          hoverPreview.style.display = 'none';
-        };
-
-        cardEl.onclick = () => {
-          hoverPreview.style.display = 'none';
-          handleCardClick(card);
-        };
-
+        cardEl.onmouseenter = () => { preview.innerHTML = `<div class="hs-card">${buildCardInnerHTML(card)}</div>`; preview.style.display = 'block'; };
+        cardEl.onmouseleave = () => { preview.style.display = 'none'; };
+        cardEl.onclick = () => { preview.style.display = 'none'; handleCardClick(card); };
         myHandDiv.appendChild(cardEl);
       });
     }
@@ -663,146 +459,62 @@
     function startSleepStruggleUI(isMyTurn) {
       stopSleepUI();
       if (isMyTurn) {
-        struggleClicks = 0;
-        struggleCountSpan.innerText = struggleClicks;
-        sleepOverlay.style.display = 'flex';
-        let remaining = 5.0;
-        sleepCountdownSpan.innerText = remaining.toFixed(1);
-        log('💤 中了【大睡】！5秒内狂按25次惊醒！', 'sleep-msg');
-
+        struggleClicks = 0; document.getElementById('struggle-count').innerText = 0;
+        document.getElementById('sleep-overlay').style.display = 'flex';
+        let remaining = 5.0; document.getElementById('sleep-countdown').innerText = '5.0';
         sleepIntervalId = setInterval(() => {
           remaining -= 0.1;
-          if (remaining <= 0) {
-            remaining = 0;
-            stopSleepUI();
-          }
-          sleepCountdownSpan.innerText = remaining.toFixed(1);
+          if (remaining <= 0) { remaining = 0; stopSleepUI(); }
+          document.getElementById('sleep-countdown').innerText = remaining.toFixed(1);
         }, 100);
-      } else {
-        log('💤 对手陷入【大睡】正在挣扎...', 'sleep-msg');
       }
     }
-
-    function stopSleepUI() {
-      if (sleepIntervalId) {
-        clearInterval(sleepIntervalId);
-        sleepIntervalId = null;
-      }
-      sleepOverlay.style.display = 'none';
-    }
-
+    function stopSleepUI() { if (sleepIntervalId) clearInterval(sleepIntervalId); document.getElementById('sleep-overlay').style.display = 'none'; }
     function handleStruggleClick() {
-      struggleClicks++;
-      struggleCountSpan.innerText = struggleClicks;
-
-      if (struggleClicks >= REQUIRED_STRUGGLE_CLICKS) {
-        stopSleepUI();
-        log('🩸 咬舌尖(-8 HP)强行惊醒！', 'sleep-msg');
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'WAKE_UP' }));
-        }
-      }
+      struggleClicks++; document.getElementById('struggle-count').innerText = struggleClicks;
+      if (struggleClicks >= 25) { stopSleepUI(); ws.send(JSON.stringify({ type: 'WAKE_UP' })); }
     }
 
     function startFloodCountdownUI(timeLimitSeconds, isMyTurn) {
-      clearInterval(floodIntervalId);
-      waterOverlay.style.display = 'none';
-      if (!timeLimitSeconds) return;
-
-      if (isMyTurn) {
-        waterOverlay.style.display = 'flex';
-        let count = Math.ceil(timeLimitSeconds);
-        bigCountdown.innerText = count;
-        log(`🌊 被【大水】淹没！只剩 ${count} 秒！`, 'flood-msg');
-
+      clearInterval(floodIntervalId); document.getElementById('water-overlay').style.display = 'none';
+      if (isMyTurn && timeLimitSeconds) {
+        document.getElementById('water-overlay').style.display = 'flex';
+        let count = Math.ceil(timeLimitSeconds); document.getElementById('big-countdown').innerText = count;
         floodIntervalId = setInterval(() => {
           count--;
-          if (count > 0) {
-            bigCountdown.innerText = count;
-          } else {
-            clearInterval(floodIntervalId);
-            waterOverlay.style.display = 'none';
-          }
+          if (count > 0) document.getElementById('big-countdown').innerText = count;
+          else { clearInterval(floodIntervalId); document.getElementById('water-overlay').style.display = 'none'; }
         }, 1000);
-      } else {
-        log(`🌊 对手正被【大水】淹没 (${timeLimitSeconds}秒)...`, 'flood-msg');
       }
     }
 
     function handleCardClick(card) {
-      if (!currentIsMyTurn) {
-        log('⚠️ 还没轮到你的回合！', 'err');
-        return;
-      }
-      if (currentMyMana < card.cost) {
-        log(`⚠️ 法力值不足！需要 ${card.cost} 费`, 'err');
-        return;
-      }
-
+      if (!currentIsMyTurn || currentMyMana < card.cost) return;
       if (card.effect.type === 'BLACK_FLASH') {
-        startBlackFlashQTE(card.id);
-      } else {
-        log(`🃏 打出【${card.name}】！`, 'msg');
-        sendPlayCard(card.id);
-      }
-    }
-
-    function startBlackFlashQTE(cardId) {
-      pendingCardId = cardId;
-      qteModal.style.display = 'block';
-      pointerPos = 0;
-      direction = 1;
-
-      if (qteAnimationId) cancelAnimationFrame(qteAnimationId);
-
-      function animatePointer() {
-        pointerPos += 1.2 * direction;
-        if (pointerPos >= 98) {
-          pointerPos = 98;
-          direction = -1;
-        } else if (pointerPos <= 0) {
-          pointerPos = 0;
-          direction = 1;
+        pendingCardId = card.id; document.getElementById('qte-modal').style.display = 'block'; pointerPos = 0; direction = 1;
+        if (qteAnimationId) cancelAnimationFrame(qteAnimationId);
+        function anim() {
+          pointerPos += 1.2 * direction;
+          if (pointerPos >= 98) { pointerPos = 98; direction = -1; } else if (pointerPos <= 0) { pointerPos = 0; direction = 1; }
+          document.getElementById('qte-pointer').style.left = pointerPos + '%';
+          qteAnimationId = requestAnimationFrame(anim);
         }
-        qtePointer.style.left = pointerPos + '%';
-        qteAnimationId = requestAnimationFrame(animatePointer);
+        anim();
+      } else {
+        ws.send(JSON.stringify({ type: 'PLAY_CARD', payload: { cardId: card.id } }));
       }
-      animatePointer();
     }
 
     function confirmBlackFlash() {
-      if (qteAnimationId) cancelAnimationFrame(qteAnimationId);
-      qteModal.style.display = 'none';
-
-      const isHit = (pointerPos >= 40 && pointerPos <= 60);
-      if (isHit) {
-        log('⚡⚡ 【黑闪】暴击！！造成 25 点伤害！', 'msg');
-      } else {
-        log('💨 【黑闪】失误！0 伤！', 'err');
-      }
-
-      sendPlayCard(pendingCardId, isHit);
+      cancelAnimationFrame(qteAnimationId); document.getElementById('qte-modal').style.display = 'none';
+      ws.send(JSON.stringify({ type: 'PLAY_CARD', payload: { cardId: pendingCardId, qteSuccess: (pointerPos >= 40 && pointerPos <= 60) } }));
       pendingCardId = null;
     }
 
-    function sendPlayCard(cardId, qteSuccess = false) {
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({
-          type: 'PLAY_CARD',
-          payload: { cardId: cardId, qteSuccess: qteSuccess }
-        }));
-      }
-    }
-
     function endTurn() {
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        qteModal.style.display = 'none';
-        waterOverlay.style.display = 'none';
-        stopSleepUI();
-        clearInterval(floodIntervalId);
-        if (qteAnimationId) cancelAnimationFrame(qteAnimationId);
-        ws.send(JSON.stringify({ type: 'END_TURN' }));
-      }
+      document.getElementById('qte-modal').style.display = 'none'; document.getElementById('water-overlay').style.display = 'none';
+      stopSleepUI(); clearInterval(floodIntervalId); cancelAnimationFrame(qteAnimationId);
+      ws.send(JSON.stringify({ type: 'END_TURN' }));
     }
   </script>
 </body>

@@ -4,22 +4,30 @@ const Room = require('./game/Room');
 const Player = require('./game/Player');
 
 const wss = new WebSocket.Server({ port: 8080 });
-const room = new Room('room_001', () => broadcastRoomState(room));
+
+// 👈 传给 Room 两个回调：一个刷新状态，一个广播动画动作！
+const room = new Room(
+  'room_001', 
+  () => broadcastRoomState(room),
+  (action) => broadcastAction(action)
+);
 
 const clients = new Map();
 let playerCounter = 1;
 
 function broadcastRoomState(roomInstance) {
   const snapshot = roomInstance.getSnapshot();
-  const message = JSON.stringify({
-    type: 'STATE_UPDATE',
-    data: snapshot
-  });
+  const message = JSON.stringify({ type: 'STATE_UPDATE', data: snapshot });
+  for (const clientWs of clients.values()) {
+    if (clientWs.readyState === WebSocket.OPEN) clientWs.send(message);
+  }
+}
 
-  for (const [playerId, clientWs] of clients.entries()) {
-    if (clientWs.readyState === WebSocket.OPEN) {
-      clientWs.send(message);
-    }
+// 👈 新增：专门用来广播战斗动画特效的函数
+function broadcastAction(action) {
+  const message = JSON.stringify({ type: 'ACTION', data: action });
+  for (const clientWs of clients.values()) {
+    if (clientWs.readyState === WebSocket.OPEN) clientWs.send(message);
   }
 }
 
@@ -27,8 +35,7 @@ wss.on('connection', (ws) => {
   const playerId = `p${playerCounter++}`;
   const player = new Player(playerId, `Player_${playerId}`);
 
-  const joined = room.addPlayer(player);
-  if (!joined) {
+  if (!room.addPlayer(player)) {
     ws.send(JSON.stringify({ type: 'ERROR', message: '房间已满！' }));
     ws.close();
     return;
@@ -37,9 +44,7 @@ wss.on('connection', (ws) => {
   clients.set(playerId, ws);
   ws.send(JSON.stringify({ type: 'SYSTEM', message: `Welcome ${player.name}! You joined ${room.roomId}` }));
 
-  if (room.state === 'PLAYING') {
-    broadcastRoomState(room);
-  }
+  if (room.state === 'PLAYING') broadcastRoomState(room);
 
   ws.on('message', (rawMessage) => {
     try {
@@ -49,15 +54,12 @@ wss.on('connection', (ws) => {
       if (data.type === 'PLAY_CARD') {
         stateChanged = room.playCard(playerId, data.payload);
       } else if (data.type === 'WAKE_UP') {
-        // 玩家狂点满 12 次后发送的惊醒请求
         stateChanged = room.wakeUp(playerId);
       } else if (data.type === 'END_TURN') {
         stateChanged = room.endTurn(playerId);
       }
 
-      if (stateChanged) {
-        broadcastRoomState(room);
-      }
+      if (stateChanged) broadcastRoomState(room);
     } catch (err) {
       console.error('解析消息失败:', err);
     }
