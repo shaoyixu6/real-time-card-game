@@ -25,8 +25,8 @@ class Player {
     this.id = id;
     this.name = name;
     this.hp = 100;
-    this.mana = 3;      // 🌟 修复：开局直接给 3 滴法力
-    this.maxMana = 3;   // 🌟 修复：最大法力值固定为 3
+    this.mana = 0;
+    this.maxMana = 2;   // 🌟【机制】：初始上限为 2，第一回合系统自动+1，开局刚好 3 费
     this.hand = [];
     
     this.nextTurnTimeLimit = null;
@@ -41,12 +41,18 @@ class Player {
   }
 
   refreshMana() {
-    this.mana = this.maxMana; // 🌟 修复：每回合直接回满 3 费，不再有成长机制
+    // 🌟【机制】：每回合上限 +1，直到 5 费封顶！
+    if (this.maxMana < 5) this.maxMana++;
+    this.mana = this.maxMana;
   }
 
-  drawCard(count) {
+  drawCard(count, room = null) {
     for (let i = 0; i < count; i++) {
-      if (this.hand.length >= 10) break; 
+      if (this.hand.length >= 5) { // 🌟 严格限制上限 5 张！
+        if (room && room.onAction) room.onAction({ type: 'CARD_BURNED', target: this.id });
+        break; // 手牌满了，爆牌直接丢弃后续抽牌
+      }
+      
       const template = getRandomCardTemplate();
       const randomSuit = SUITS[Math.floor(Math.random() * SUITS.length)];
       

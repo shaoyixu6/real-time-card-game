@@ -89,10 +89,11 @@ class Room {
   startGame() {
     this.state = 'PLAYING';
     this.currentTurnPlayerId = this.players[0].id;
-    this.players[0].drawCard(3);
-    this.players[1].drawCard(3);
+    // 🌟 传入 this 给发牌机
+    this.players[0].drawCard(3, this); 
+    this.players[1].drawCard(3, this);
     this.players[0].refreshMana();
-    this.players[0].drawCard(1);
+    this.players[0].drawCard(1, this);
   }
 
   playCard(playerId, payload) {
@@ -187,12 +188,12 @@ class Room {
       this.turn++;
       const me = this.players.find(p => p.id === playerId);
       me.refreshMana();
-      me.drawCard(1);
+      me.drawCard(1, this); // 🌟 这里加上 this
     } else {
       this.currentTurnPlayerId = nextPlayer.id;
       this.turn++;
       nextPlayer.refreshMana();
-      nextPlayer.drawCard(1);
+      nextPlayer.drawCard(1, this); // 🌟 这里加上 this
 
       if (nextPlayer.nextTurnTimeLimit) {
         const limitSeconds = nextPlayer.nextTurnTimeLimit;

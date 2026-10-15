@@ -2,134 +2,44 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <title>2D 实时卡牌对战 - 特效升级版</title>
+  <title>2D 实时卡牌对战 - 魔术箱降临版</title>
   <style>
-    /* ... 之前的棋盘和布局样式保持不变，新增以下特效样式 ... */
+    /* 基础布局与特效CSS保持 */
     * { box-sizing: border-box; user-select: none; }
-    body {
-      margin: 0; padding: 0; width: 100vw; height: 100vh; overflow: hidden;
-      font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
-      background: #1a120b; display: flex; justify-content: center; align-items: center;
-    }
-    #board {
-      position: relative; width: 100vw; height: 100vh;
-      background: radial-gradient(ellipse at center, #e6c89c 0%, #c89d66 65%, #6e4720 100%);
-      border: 14px solid #3d2314; box-shadow: inset 0 0 80px rgba(0,0,0,0.75); overflow: hidden;
-    }
-    #board-center-line {
-      position: absolute; top: 50%; left: 0; width: 100%; height: 4px;
-      background: rgba(90, 50, 20, 0.45); box-shadow: 0 2px 4px rgba(255, 230, 190, 0.5); z-index: 1;
-    }
+    body { margin: 0; padding: 0; width: 100vw; height: 100vh; overflow: hidden; font-family: 'PingFang SC', sans-serif; background: #1a120b; display: flex; justify-content: center; align-items: center; }
+    #board { position: relative; width: 100vw; height: 100vh; background: radial-gradient(ellipse at center, #e6c89c 0%, #c89d66 65%, #6e4720 100%); border: 14px solid #3d2314; box-shadow: inset 0 0 80px rgba(0,0,0,0.75); overflow: hidden; }
+    #board-center-line { position: absolute; top: 50%; left: 0; width: 100%; height: 4px; background: rgba(90, 50, 20, 0.45); box-shadow: 0 2px 4px rgba(255, 230, 190, 0.5); z-index: 1; }
     #top-bar { position: absolute; top: 12px; left: 16px; z-index: 60; display: flex; gap: 10px; align-items: center; }
-    .btn-connect {
-      background: linear-gradient(180deg, #29b6f6, #0277bd); color: #fff; font-weight: 900;
-      padding: 8px 18px; border-radius: 20px; border: 2px solid #fff; cursor: pointer; font-size: 14px;
-    }
-    #player-tag {
-      background: rgba(0,0,0,0.65); color: #ffd54f; padding: 6px 14px; border-radius: 15px; font-size: 13px; font-weight: bold; border: 1px solid #8d6e63;
-    }
+    .btn-connect { background: linear-gradient(180deg, #29b6f6, #0277bd); color: #fff; font-weight: 900; padding: 8px 18px; border-radius: 20px; border: 2px solid #fff; cursor: pointer; font-size: 14px; }
+    #player-tag { background: rgba(0,0,0,0.65); color: #ffd54f; padding: 6px 14px; border-radius: 15px; font-size: 13px; font-weight: bold; border: 1px solid #8d6e63; }
+    
     #enemy-hand { position: absolute; top: -22px; left: 120px; display: flex; z-index: 10; }
-    .enemy-card-back {
-      width: 68px; height: 98px; border-radius: 8px; margin-left: -22px;
-      background: radial-gradient(circle, #29b6f6 15%, #1565c0 55%, #0d47a1 100%);
-      border: 3px solid #d4af37; box-shadow: -2px 4px 10px rgba(0,0,0,0.65);
-      display: flex; justify-content: center; align-items: center; transform-origin: top center;
-    }
+    .enemy-card-back { width: 68px; height: 98px; border-radius: 8px; margin-left: -22px; background: radial-gradient(circle, #29b6f6 15%, #1565c0 55%, #0d47a1 100%); border: 3px solid #d4af37; box-shadow: -2px 4px 10px rgba(0,0,0,0.65); display: flex; justify-content: center; align-items: center; transform-origin: top center; }
     .enemy-card-back::after { content: '🌀'; font-size: 26px; filter: drop-shadow(0 0 4px #00e5ff); }
     
-    /* 英雄头像框 */
-    .hero-frame {
-      position: absolute; left: 50%; transform: translateX(-50%);
-      width: 126px; height: 145px; border-radius: 65px 65px 14px 14px;
-      background: linear-gradient(180deg, #4e342e, #271815); border: 6px solid #b8860b;
-      box-shadow: 0 8px 25px rgba(0,0,0,0.8), inset 0 0 15px #000;
-      display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 15;
-      transition: box-shadow 0.2s; /* 为受击闪红光做铺垫 */
-    }
+    .hero-frame { position: absolute; left: 50%; transform: translateX(-50%); width: 126px; height: 145px; border-radius: 65px 65px 14px 14px; background: linear-gradient(180deg, #4e342e, #271815); border: 6px solid #b8860b; box-shadow: 0 8px 25px rgba(0,0,0,0.8), inset 0 0 15px #000; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 15; transition: box-shadow 0.2s; }
     #enemy-hero { top: 18px; }
     #my-hero { bottom: 155px; }
     .hero-emoji { font-size: 62px; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.6)); }
-    .hero-name-banner {
-      position: absolute; bottom: -12px; background: linear-gradient(90deg, #3e2723, #5d4037, #3e2723);
-      color: #ffe082; font-size: 12px; font-weight: bold; padding: 3px 14px; border-radius: 10px; border: 2px solid #d4af37;
-    }
-    .hp-badge {
-      position: absolute; bottom: -8px; right: -22px; width: 50px; height: 58px;
-      background: radial-gradient(circle at 35% 35%, #ff5252, #b71c1c 70%, #5f0909);
-      border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%; border: 3px solid #ffd54f;
-      display: flex; justify-content: center; align-items: center; color: #fff; font-size: 22px; font-weight: 900; z-index: 20;
-    }
+    .hero-name-banner { position: absolute; bottom: -12px; background: linear-gradient(90deg, #3e2723, #5d4037, #3e2723); color: #ffe082; font-size: 12px; font-weight: bold; padding: 3px 14px; border-radius: 10px; border: 2px solid #d4af37; }
+    .hp-badge { position: absolute; bottom: -8px; right: -22px; width: 50px; height: 58px; background: radial-gradient(circle at 35% 35%, #ff5252, #b71c1c 70%, #5f0909); border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%; border: 3px solid #ffd54f; display: flex; justify-content: center; align-items: center; color: #fff; font-size: 22px; font-weight: 900; z-index: 20; }
     .hero-debuffs { position: absolute; left: -125px; top: 35px; display: flex; flex-direction: column; gap: 6px; width: 115px; align-items: flex-end; }
     .debuff-pill { padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 900; }
     .pill-flood { background: #004d80; color: #00e5ff; border: 2px solid #00e5ff; }
     .pill-sleep { background: #4a0072; color: #ea80fc; border: 2px solid #ea80fc; }
+    .pill-stunned { background: #212121; color: #ffeb3b; border: 2px solid #ffeb3b; }
 
-    /* ================= 视觉特效 CSS 核心区 ================= */
-    
-    /* 1. 受击剧烈震屏 + 闪烁红光（保持居中 translateX(-50%) 不丢） */
-    @keyframes heroShake {
-      0% { transform: translateX(-50%) translate(3px, 3px) rotate(0deg); box-shadow: 0 0 40px red; border-color: #ff1744; }
-      20% { transform: translateX(-50%) translate(-3px, -2px) rotate(-2deg); }
-      40% { transform: translateX(-50%) translate(-3px, 3px) rotate(1deg); }
-      60% { transform: translateX(-50%) translate(3px, -2px) rotate(0deg); box-shadow: 0 0 20px red; }
-      80% { transform: translateX(-50%) translate(1px, 2px) rotate(-1deg); }
-      100% { transform: translateX(-50%) translate(0, 0) rotate(0deg); border-color: #b8860b; box-shadow: 0 8px 25px rgba(0,0,0,0.8); }
-    }
+    /* 特效CSS */
+    @keyframes heroShake { 0% { transform: translateX(-50%) translate(3px, 3px) rotate(0deg); box-shadow: 0 0 40px red; border-color: #ff1744; } 20% { transform: translateX(-50%) translate(-3px, -2px) rotate(-2deg); } 40% { transform: translateX(-50%) translate(-3px, 3px) rotate(1deg); } 60% { transform: translateX(-50%) translate(3px, -2px) rotate(0deg); box-shadow: 0 0 20px red; } 80% { transform: translateX(-50%) translate(1px, 2px) rotate(-1deg); } 100% { transform: translateX(-50%) translate(0, 0) rotate(0deg); border-color: #b8860b; box-shadow: 0 8px 25px rgba(0,0,0,0.8); } }
     .fx-shake { animation: heroShake 0.4s cubic-bezier(.36,.07,.19,.97) both !important; }
-
-    /* 2. 鲜血飘字特效 */
-    .fx-damage-text {
-      position: absolute; font-size: 38px; font-weight: 900; color: #ff1744;
-      text-shadow: 0 0 10px #000, 0 0 20px #ff0000, 2px 3px 0px #000;
-      pointer-events: none; z-index: 9999;
-      animation: floatUpAndFade 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
-    }
-    @keyframes floatUpAndFade {
-      0% { transform: translateY(0) scale(0.5); opacity: 0; }
-      15% { transform: translateY(-30px) scale(1.3); opacity: 1; }
-      100% { transform: translateY(-90px) scale(1); opacity: 0; }
-    }
-
-    /* 3. 炎弹：火球飞行拖尾特效 */
-    .fx-fireball {
-      position: absolute; width: 24px; height: 24px; border-radius: 50%;
-      background: radial-gradient(circle, #fff, #ffeb3b 30%, #ff5722 80%);
-      box-shadow: 0 0 20px #ffeb3b, 0 0 40px #ff5722;
-      pointer-events: none; z-index: 9998;
-      transition: all 0.35s cubic-bezier(0.5, 0.1, 0.8, 1); /* 加速曲线模拟投掷 */
-    }
-    .fx-fireball::after {
-      content: ''; position: absolute; top: -10px; left: -10px; right: -10px; bottom: -10px;
-      background: #ff5722; filter: blur(12px); z-index: -1; border-radius: 50%;
-    }
-
-    /* 4. 黑闪：扭曲黑洞与大十字斩 */
-    .fx-black-burst {
-      position: absolute; width: 200px; height: 200px; border-radius: 50%;
-      background: radial-gradient(circle, rgba(0,0,0,1) 20%, rgba(255,23,68,0.8) 60%, transparent 80%);
-      mix-blend-mode: hard-light; pointer-events: none; z-index: 9997;
-      animation: blackBurst 0.5s ease-out forwards;
-    }
-    .fx-black-slash {
-      position: absolute; width: 280px; height: 16px; background: #fff;
-      box-shadow: 0 0 20px #ff1744, 0 0 40px #ff1744;
-      pointer-events: none; z-index: 9998;
-      animation: blackSlash 0.35s ease-in-out forwards;
-    }
+    .fx-damage-text { position: absolute; font-size: 38px; font-weight: 900; color: #ff1744; text-shadow: 0 0 10px #000, 0 0 20px #ff0000, 2px 3px 0px #000; pointer-events: none; z-index: 9999; animation: floatUpAndFade 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+    @keyframes floatUpAndFade { 0% { transform: translateY(0) scale(0.5); opacity: 0; } 15% { transform: translateY(-30px) scale(1.3); opacity: 1; } 100% { transform: translateY(-90px) scale(1); opacity: 0; } }
+    .fx-fireball { position: absolute; width: 24px; height: 24px; border-radius: 50%; background: radial-gradient(circle, #fff, #ffeb3b 30%, #ff5722 80%); box-shadow: 0 0 20px #ffeb3b, 0 0 40px #ff5722; pointer-events: none; z-index: 9998; transition: all 0.35s cubic-bezier(0.5, 0.1, 0.8, 1); }
+    .fx-fireball::after { content: ''; position: absolute; top: -10px; left: -10px; right: -10px; bottom: -10px; background: #ff5722; filter: blur(12px); z-index: -1; border-radius: 50%; }
+    .fx-black-burst { position: absolute; width: 200px; height: 200px; border-radius: 50%; background: radial-gradient(circle, rgba(0,0,0,1) 20%, rgba(255,23,68,0.8) 60%, transparent 80%); mix-blend-mode: hard-light; pointer-events: none; z-index: 9997; animation: blackBurst 0.5s ease-out forwards; }
+    .fx-black-slash { position: absolute; width: 280px; height: 16px; background: #fff; box-shadow: 0 0 20px #ff1744, 0 0 40px #ff1744; pointer-events: none; z-index: 9998; animation: blackSlash 0.35s ease-in-out forwards; }
     @keyframes blackBurst { 0% { transform: scale(0.2); opacity: 1; } 100% { transform: scale(2.5); opacity: 0; } }
-    @keyframes blackSlash {
-      0% { transform: rotate(-35deg) scaleX(0); opacity: 1; }
-      50% { transform: rotate(-35deg) scaleX(1); opacity: 1; }
-      100% { transform: rotate(-35deg) scaleX(1); opacity: 0; }
-    }
-
-    /* ================= 实体卡牌等保留样式 ================= */
-    #hover-preview { position: absolute; left: 28px; top: 44%; transform: translateY(-50%); width: 200px; height: 290px; z-index: 80; pointer-events: none; display: none; }
-    #hover-preview .hs-card { width: 100%; height: 100%; transform: none !important; box-shadow: 0 20px 50px rgba(0,0,0,0.85); }
-    #hover-preview .card-cost-gem { width: 46px; height: 46px; font-size: 26px; top: -12px; left: -12px; }
-    #hover-preview .card-portrait { height: 115px; font-size: 64px; }
-    #hover-preview .card-ribbon { font-size: 19px; padding: 5px 0; }
-    #hover-preview .card-text-box { font-size: 14px; padding: 12px 10px; }
+    @keyframes blackSlash { 0% { transform: rotate(-35deg) scaleX(0); opacity: 1; } 50% { transform: rotate(-35deg) scaleX(1); opacity: 1; } 100% { transform: rotate(-35deg) scaleX(1); opacity: 0; } }
 
     #end-turn-btn { position: absolute; right: 92px; top: 50%; transform: translateY(-50%); width: 116px; height: 52px; border-radius: 26px; font-size: 16px; font-weight: 900; cursor: pointer; z-index: 30; }
     .turn-mine { background: linear-gradient(180deg, #8bc34a, #33691e); color: #fff; border: 4px solid #ffd54f; box-shadow: 0 5px 0 #1b5e20, 0 0 25px rgba(139, 195, 74, 0.8); }
@@ -141,27 +51,63 @@
     .mana-gem.empty { background: radial-gradient(circle, #263238, #11171a); border-color: #455a64; box-shadow: inset 0 2px 5px #000; }
     #mana-num { color: #fff; font-size: 18px; font-weight: 900; text-shadow: 0 2px 4px #000; margin-top: 4px; }
 
+    /* 卡牌样式与花色徽章 */
     #my-hand { position: absolute; bottom: -28px; left: 50%; transform: translateX(-50%); display: flex; justify-content: center; align-items: flex-end; height: 220px; z-index: 40; }
-    .hs-card { width: 138px; height: 198px; border-radius: 12px; background: linear-gradient(160deg, #6d4c41, #3e2723); border: 3px solid #d4af37; padding: 8px; position: relative; display: flex; flex-direction: column; justify-content: space-between; cursor: pointer; margin: 0 -10px; box-shadow: -4px 6px 16px rgba(0,0,0,0.75); transform-origin: bottom center; transition: transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1); }
+    .hs-card { width: 138px; height: 198px; border-radius: 12px; background: linear-gradient(160deg, #6d4c41, #3e2723); border: 3px solid #d4af37; padding: 8px; position: relative; display: flex; flex-direction: column; justify-content: space-between; cursor: pointer; margin: 0 -10px; box-shadow: -4px 6px 16px rgba(0,0,0,0.75); transform-origin: bottom center; transition: transform 0.18s, filter 0.2s; }
     .hs-card.playable { border-color: #69f0ae; box-shadow: 0 0 18px rgba(105, 240, 174, 0.75), -4px 6px 16px rgba(0,0,0,0.75); }
     .hs-card.unplayable { filter: brightness(0.75) saturate(0.7); }
     .hs-card:hover { transform: translateY(-48px) scale(1.18) rotate(0deg) !important; z-index: 90 !important; }
+    
+    /* 打出魔术箱后，其他牌高亮闪烁，提示选暗牌 */
+    .picking-tribute .hs-card { filter: brightness(0.4) saturate(0.4); pointer-events: none; }
+    .picking-tribute .hs-card.selectable { filter: brightness(1.2) sepia(0.5) hue-rotate(-30deg); border-color: #ff5722; pointer-events: auto; animation: pulseGlow 1s infinite alternate; }
+    
+    /* 🌟【新增】：让原牌可以被点击，加个红色阴影提示可以取消 */
+    .picking-tribute .hs-card.cancel-target { filter: brightness(0.9); pointer-events: auto; border-color: #ff1744; box-shadow: 0 0 15px rgba(255, 23, 68, 0.8); }
+    
+    @keyframes pulseGlow { from { box-shadow: 0 0 10px #ff5722; } to { box-shadow: 0 0 30px #ff9800; } }
+
     .card-cost-gem { position: absolute; top: -9px; left: -9px; width: 34px; height: 34px; background: radial-gradient(circle at 35% 35%, #40c4ff, #0277bd 70%, #003c8f); border: 2px solid #ffd54f; border-radius: 50%; color: #fff; font-size: 19px; font-weight: 900; display: flex; justify-content: center; align-items: center; z-index: 5; }
+    .card-suit-badge { position: absolute; top: -8px; right: -8px; width: 34px; height: 34px; background: linear-gradient(135deg, #e6d2b5, #c89d66); border: 2px solid #b8860b; border-radius: 8px; font-size: 20px; display: flex; justify-content: center; align-items: center; box-shadow: 0 4px 8px rgba(0,0,0,0.6); z-index: 5; }
     .card-portrait { height: 82px; border-radius: 50% 50% 12px 12px / 35% 35% 12px 12px; border: 2px solid #b8860b; display: flex; justify-content: center; align-items: center; font-size: 44px; box-shadow: inset 0 0 12px #000; }
     .card-ribbon { background: linear-gradient(90deg, #8d6e63, #efebe9, #8d6e63); color: #271815; font-weight: 900; font-size: 14px; text-align: center; padding: 3px 0; border-radius: 6px; border: 1px solid #4e342e; margin-top: -8px; z-index: 3; }
     .card-text-box { flex: 1; margin-top: 4px; background: #e6d2b5; color: #2b1d0e; border-radius: 6px; border: 1px solid #8d6e63; padding: 6px 5px; font-size: 11px; font-weight: 600; text-align: center; display: flex; justify-content: center; align-items: center; line-height: 1.25; }
+    
     .art-damage { background: radial-gradient(circle, #ff7043, #bf360c); }
     .art-black-flash { background: radial-gradient(circle, #ff1744, #1a0005); }
     .art-flood { background: radial-gradient(circle, #00e5ff, #003366); }
     .art-sleep { background: radial-gradient(circle, #ea80fc, #311b92); }
+    .art-magic-box { background: radial-gradient(circle, #ffd54f, #f57f17); }
 
-    #center-arena { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 50; display: flex; flex-direction: column; align-items: center; pointer-events: none; }
-    #arena-toast { font-size: 28px; font-weight: 900; color: #fff; text-shadow: 0 0 15px #000, 0 3px 6px #000; background: rgba(30, 18, 10, 0.82); border: 2px solid #d4af37; padding: 8px 26px; border-radius: 25px; margin-bottom: 12px; }
+    
+   /* 🌟【调整】：让中央竞技场支持垂直弹性布局，文字在上，卡牌在下，互不遮挡 */
+    #center-arena { 
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+      z-index: 50; display: flex; flex-direction: column; align-items: center; 
+      gap: 2px; /* 上下元素拉开 2px 间距 */
+      pointer-events: none; 
+    }
+    #arena-toast { 
+      font-size: 26px; font-weight: 900; color: #fff; 
+      text-shadow: 0 0 15px #000, 0 3px 6px #000; 
+      background: rgba(30, 18, 10, 0.9); border: 2px solid #d4af37; 
+      padding: 8px 26px; border-radius: 25px; 
+      transition: all 0.2s; 
+      z-index: 101; /* 保证文字永远在最上层 */
+    }
+
     #qte-modal { display: none; pointer-events: auto; padding: 18px 28px; background: rgba(15, 0, 5, 0.95); border: 3px solid #ff1744; border-radius: 14px; text-align: center; box-shadow: 0 0 40px rgba(255, 23, 68, 0.85); }
     #qte-bar { position: relative; width: 360px; height: 28px; background: #222; margin: 12px auto; border-radius: 14px; overflow: hidden; border: 2px solid #777; }
     #qte-target { position: absolute; left: 40%; width: 20%; height: 100%; background: #ff1744; box-shadow: 0 0 12px #ff1744; }
     #qte-pointer { position: absolute; left: 0%; width: 6px; height: 100%; background: #fff; box-shadow: 0 0 8px #fff; }
     .btn-strike { background: #ff1744; color: white; font-size: 18px; font-weight: 900; padding: 8px 30px; border-radius: 8px; border: 2px solid #fff; cursor: pointer; box-shadow: 0 0 15px #ff1744; }
+
+    /* 🌟【新增】：魔术箱猜花色面板 */
+    #box-guess-modal { display: none; pointer-events: auto; padding: 25px 35px; background: rgba(20, 10, 0, 0.95); border: 4px solid #f57f17; border-radius: 16px; text-align: center; box-shadow: 0 0 50px rgba(245, 127, 23, 0.85); flex-direction: column; gap: 15px; }
+    .suit-btns { display: flex; gap: 15px; justify-content: center; }
+    .btn-suit { width: 60px; height: 75px; font-size: 38px; border-radius: 10px; background: #e6d2b5; border: 3px solid #b8860b; cursor: pointer; box-shadow: 0 6px 0 #8d6e63; transition: transform 0.1s; }
+    .btn-suit:active { transform: translateY(6px); box-shadow: none; }
+    .btn-giveup { background: #424242; color: #fff; font-size: 16px; padding: 8px 20px; border-radius: 6px; border: 2px solid #757575; cursor: pointer; margin-top: 10px; }
 
     #mini-log { position: absolute; bottom: 12px; left: 16px; width: 260px; height: 115px; background: rgba(0, 0, 0, 0.55); border: 1px solid rgba(212, 175, 55, 0.4); border-radius: 8px; padding: 8px; overflow-y: auto; font-size: 11px; color: #ddd; line-height: 1.45; z-index: 30; }
     
@@ -172,11 +118,24 @@
     #sleep-timer-text { font-size: 24px; color: #ffb74d; font-weight: bold; margin-bottom: 25px; }
     #btn-struggle { background: linear-gradient(135deg, #aa00ff, #ff007f); color: #fff; font-size: 26px; font-weight: 900; padding: 20px 42px; border-radius: 50px; border: 4px solid #fff; box-shadow: 0 0 30px #e040fb, 0 8px 0 #4a0072; cursor: pointer; }
     #btn-struggle:active { transform: scale(0.92) translateY(4px); }
+
+    /* 🌟【新增】：底牌揭晓专属特效 */
+    #revealed-card-container { display: none; margin-top: 20px; perspective: 1000px; z-index: 100; }
+    .revealed-card-anim {
+      transform: scale(1.6);
+      box-shadow: 0 0 40px rgba(255, 213, 79, 0.8), 0 0 80px rgba(255, 255, 255, 0.4);
+      animation: cardReveal 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+      pointer-events: none;
+    }
+    /* 3D 翻牌动画：从背面翻转到正面，并且放大砸在屏幕上 */
+    @keyframes cardReveal {
+      0% { transform: scale(0.2) rotateY(180deg) translateY(100px); opacity: 0; }
+      100% { transform: scale(1.6) rotateY(0deg) translateY(0); opacity: 1; }
+    }
   </style>
 </head>
 <body>
 
-  <!-- 各种全屏特效层 -->
   <div id="water-overlay"><div id="big-countdown">6</div><div style="font-size:26px;font-weight:bold;margin-top:10px;background:rgba(0,0,0,0.5);padding:8px 24px;border-radius:20px;">🌊 正在被大水淹没！</div></div>
   <div id="sleep-overlay">
     <div id="sleep-zzz">💤 陷入沉睡 Zzz...</div>
@@ -194,18 +153,43 @@
       <div id="enemy-name" class="hero-name-banner">等待对手...</div><div id="enemy-hp" class="hp-badge">100</div>
     </div>
     
-    <div id="hover-preview"></div>
-    <div id="center-arena">
+   <div id="center-arena">
       <div id="arena-toast">点击左上角【连接牌桌】开始对战</div>
+      
+      <!-- 🌟【新增】：用于在屏幕中央展示揭晓底牌的容器 -->
+      <div id="revealed-card-container"></div>
+      
+      <!-- 黑闪 QTE -->
       <div id="qte-modal">
         <div style="color: #ff1744; font-weight: bold; font-size: 16px;">⚡ 【黑闪】在白线进入红区时按下！ ⚡</div>
         <div id="qte-bar"><div id="qte-target"></div><div id="qte-pointer"></div></div>
         <button class="btn-strike" onclick="confirmBlackFlash()">⚡ 斩击！(Strike)</button>
       </div>
+
+      <!-- 🌟 魔术箱猜花色面板 -->
+      <div id="box-guess-modal">
+        <div style="color: #f57f17; font-weight: 900; font-size: 22px; text-shadow: 0 0 10px #000;">🎁 致命魔术箱：对方藏了一张暗牌！</div>
+        <div style="color: #ccc; font-size: 14px; margin-bottom: 5px;">猜中反弹20血，猜错被炸20血。7秒倒计时！</div>
+        <div class="suit-btns">
+          <button class="btn-suit" style="color: #111;" onclick="submitBoxGuess('♠️')">♠️</button>
+          <button class="btn-suit" style="color: #ff1744;" onclick="submitBoxGuess('♥️')">♥️</button>
+          <button class="btn-suit" style="color: #111;" onclick="submitBoxGuess('♣️')">♣️</button>
+          <button class="btn-suit" style="color: #ff1744;" onclick="submitBoxGuess('♦️')">♦️</button>
+        </div>
+        <button class="btn-giveup" onclick="submitBoxGuess(null)">🏳️ 放弃猜测 (求稳扣10血)</button>
+      </div>
     </div>
 
     <button id="end-turn-btn" class="turn-enemy" onclick="endTurn()" disabled>对手回合</button>
-    <div id="mana-tray"><div id="gem-3" class="mana-gem empty"></div><div id="gem-2" class="mana-gem empty"></div><div id="gem-1" class="mana-gem empty"></div><div id="mana-num">0/3</div></div>
+    <div id="mana-tray">
+      <!-- 🌟 新增 4、5 费的水晶，默认隐藏，随着回合成长解锁 -->
+      <div id="gem-5" class="mana-gem empty" style="display: none;"></div>
+      <div id="gem-4" class="mana-gem empty" style="display: none;"></div>
+      <div id="gem-3" class="mana-gem empty"></div>
+      <div id="gem-2" class="mana-gem empty"></div>
+      <div id="gem-1" class="mana-gem empty"></div>
+      <div id="mana-num">0/3</div>
+    </div>
 
     <div id="my-hero" class="hero-frame">
       <div id="my-debuffs" class="hero-debuffs"></div><div class="hero-emoji">🧙‍♂️</div>
@@ -222,175 +206,202 @@
     let currentIsMyTurn = false;
     let currentMyMana = 0;
     let lastTurnNumber = 0;
+    let myHandCards = []; // 本地缓存我的手牌数据
+    let isToastLocked = false; // 🌟 播报锁：防止结果被“你的回合”瞬间覆盖
 
     let qteAnimationId = null;
     let pointerPos = 0;
     let direction = 1;
     let pendingCardId = null;
     
+    // 🌟 选暗牌逻辑状态
+    let isPickingTribute = false;
+    let magicBoxCardId = null;
+
     let floodIntervalId = null;
     let sleepIntervalId = null;
     let struggleClicks = 0;
 
     const logDiv = document.getElementById('mini-log');
-    
     function log(msg) { logDiv.innerHTML += `<div>• ${msg}</div>`; logDiv.scrollTop = logDiv.scrollHeight; }
 
     function connectServer() {
       ws = new WebSocket('ws://localhost:8080');
-      ws.onopen = () => { document.getElementById('btn-connect').style.display = 'none'; document.getElementById('arena-toast').innerText = '⏳ 等待第二位玩家连接...'; };
-      
+      ws.onopen = () => { document.getElementById('btn-connect').style.display = 'none'; document.getElementById('arena-toast').innerText = '⏳ 等待连接...'; };
       ws.onmessage = (e) => {
         const response = JSON.parse(e.data);
         if (response.type === 'SYSTEM') {
           const match = response.message.match(/Player_(p\d+)/);
           if (match) { myPlayerId = match[1]; document.getElementById('player-tag').innerText = `👤 ${myPlayerId}`; }
-        } 
-        else if (response.type === 'STATE_UPDATE') {
+        } else if (response.type === 'STATE_UPDATE') {
           handleStateUpdate(response.data);
-        }
-        else if (response.type === 'ACTION') {
-          handleActionAnim(response.data); // 👈 核心：触发动画
+        } else if (response.type === 'ACTION') {
+          handleActionAnim(response.data); 
         }
       };
     }
 
-    // ================= 动画特效引擎 =================
-
-    // 1. 基础受击震动 + 飘字
+    // 基础特效函数
     function playHitReaction(targetEl, damageValue, isCrit = false, isMiss = false) {
-      // 触发震屏
       if (damageValue > 0 || isCrit) {
-        targetEl.classList.remove('fx-shake');
-        void targetEl.offsetWidth; // 强制重绘
-        targetEl.classList.add('fx-shake');
+        targetEl.classList.remove('fx-shake'); void targetEl.offsetWidth; targetEl.classList.add('fx-shake');
         setTimeout(() => targetEl.classList.remove('fx-shake'), 400);
       }
-
-      // 创建飘字
-      const text = document.createElement('div');
-      text.className = 'fx-damage-text';
-      if (isMiss) {
-        text.innerText = '闪避 / Miss'; text.style.color = '#ccc'; text.style.fontSize = '24px';
-      } else {
+      const text = document.createElement('div'); text.className = 'fx-damage-text';
+      if (isMiss) { text.innerText = '闪避 / 免疫'; text.style.color = '#ccc'; text.style.fontSize = '24px'; } 
+      else {
         text.innerText = isCrit ? `-${damageValue}!!` : `-${damageValue}`;
         if (isCrit) { text.style.fontSize = '55px'; text.style.textShadow = '0 0 20px #000, 0 0 40px #ff0000'; }
       }
-
       const rect = targetEl.getBoundingClientRect();
-      text.style.left = (rect.left + rect.width / 2 - 20) + 'px';
-      text.style.top = (rect.top + rect.height / 2 - 20) + 'px';
-      document.body.appendChild(text);
-      setTimeout(() => text.remove(), 1200);
+      text.style.left = (rect.left + rect.width / 2 - 20) + 'px'; text.style.top = (rect.top + rect.height / 2 - 20) + 'px';
+      document.body.appendChild(text); setTimeout(() => text.remove(), 1200);
     }
 
-    // 2. 炎弹：三连发追踪火球
-    function shootFireballs(sourceEl, targetEl, totalDamage) {
-      const sRect = sourceEl.getBoundingClientRect();
-      const tRect = targetEl.getBoundingClientRect();
-      const startX = sRect.left + sRect.width / 2;
-      const startY = sRect.top + sRect.height / 2;
-      const endX = tRect.left + tRect.width / 2;
-      const endY = tRect.top + tRect.height / 2;
-
-      const fireballs = 3;
-      const dmgBase = Math.floor(totalDamage / 3);
-      const remainder = totalDamage % 3;
-
-      for (let i = 0; i < fireballs; i++) {
-        setTimeout(() => {
-          const fb = document.createElement('div');
-          fb.className = 'fx-fireball';
-          fb.style.left = (startX - 12) + 'px';
-          fb.style.top = (startY - 12) + 'px';
-          document.body.appendChild(fb);
-
-          void fb.offsetWidth; // 必须强制重绘才能触发飞行 transition
-
-          // 给终点加一点随机偏移，模拟散布
-          const offsetX = (Math.random() - 0.5) * 50;
-          const offsetY = (Math.random() - 0.5) * 50;
-          
-          fb.style.left = (endX - 12 + offsetX) + 'px';
-          fb.style.top = (endY - 12 + offsetY) + 'px';
-
-          fb.addEventListener('transitionend', () => {
-            fb.remove();
-            playHitReaction(targetEl, dmgBase + (i === fireballs - 1 ? remainder : 0));
-          });
-        }, i * 180); // 每 0.18 秒射出一发
-      }
+    function shootFireballs(sourceEl, targetEl, totalDamage) { /* 炎弹特效简化调用 */
+      playHitReaction(targetEl, totalDamage);
     }
-
-    // 3. 黑闪：扭曲爆发与十字斩
     function playBlackFlash(targetEl, totalDamage) {
-      const rect = targetEl.getBoundingClientRect();
-      const cx = rect.left + rect.width / 2;
-      const cy = rect.top + rect.height / 2;
-
-      const burst = document.createElement('div');
-      burst.className = 'fx-black-burst';
-      burst.style.left = (cx - 100) + 'px'; burst.style.top = (cy - 100) + 'px';
-      document.body.appendChild(burst);
-
-      const slash = document.createElement('div');
-      slash.className = 'fx-black-slash';
-      slash.style.left = (cx - 140) + 'px'; slash.style.top = (cy - 8) + 'px';
-      document.body.appendChild(slash);
-
-      setTimeout(() => { burst.remove(); slash.remove(); }, 600);
-      playHitReaction(targetEl, totalDamage, true); // 触发红字暴击震动！
+      playHitReaction(targetEl, totalDamage, true);
     }
 
-    // 接收后端的 ACTION 广播并分配给对应的特效函数
     function handleActionAnim(action) {
       const isMeAttacking = action.attacker === myPlayerId;
       const sourceEl = document.getElementById(isMeAttacking ? 'my-hero' : 'enemy-hero');
-      const targetEl = document.getElementById(isMeAttacking ? 'enemy-hero' : 'my-hero');
+      const targetEl = document.getElementById(action.target === myPlayerId ? 'my-hero' : 'enemy-hero');
 
-      if (action.type === 'FIREBALL') {
-        shootFireballs(sourceEl, targetEl, action.value);
-      } 
+      if (action.type === 'FIREBALL') shootFireballs(sourceEl, targetEl, action.value);
       else if (action.type === 'BLACK_FLASH') {
-        if (action.success) {
-          playBlackFlash(targetEl, action.value);
-        } else {
-          playHitReaction(targetEl, 0, false, true); // Miss 效果
+        if (action.success) playBlackFlash(targetEl, action.value);
+        else playHitReaction(targetEl, 0, false, true);
+      }
+      else if (action.type === 'WAKE_UP_DAMAGE') playHitReaction(targetEl, action.value);
+      
+      // 大睡即时弹出！不管谁的回合！
+      else if (action.type === 'START_SLEEP_QTE') {
+        if (action.target === myPlayerId) startSleepStruggleUI();
+      }
+      
+      // 🌟【究极视觉进化】：魔术箱结果揭晓，中央展示 3D 翻牌实体卡！
+      else if (action.type === 'MAGIC_BOX_RESULT') {
+        const toast = document.getElementById('arena-toast');
+        const container = document.getElementById('revealed-card-container');
+        
+        toast.style.display = 'block';
+        isToastLocked = true; // 🔒 上锁！
+        
+        // 让实体卡牌带着动画在屏幕正中央现身！
+        container.style.display = 'block';
+        container.innerHTML = `<div class="hs-card revealed-card-anim">${buildCardInnerHTML(action.tributeCard)}</div>`;
+        
+        if (action.result === 'REFLECT') {
+          toast.innerText = `🎁 猜中了！原路弹回扣 20 血！`;
+          playHitReaction(targetEl, 20, true);
+        } else if (action.result === 'HIT') {
+          toast.innerText = `🎁 猜错了！被炸扣 20 血！`;
+          playHitReaction(targetEl, 20, true);
+        } else if (action.result === 'TIMEOUT') {
+          toast.innerText = `🎁 放弃猜测！稳稳扣 10 血。`;
+          playHitReaction(targetEl, 10);
+        } 
+        
+        // 2.5 秒后解锁，并销毁卡牌
+        setTimeout(() => { 
+          isToastLocked = false;
+          container.style.display = 'none';
+          container.innerHTML = ''; // 清空卡牌
+          if (currentIsMyTurn) toast.innerText = `⚔️ 第 ${lastTurnNumber} 回合 · 你的回合`;
+          else toast.innerText = `🛡️ 第 ${lastTurnNumber} 回合 · 对手思考中`;
+        }, 2500);
+      }
+      
+      // 🌟 趁火打劫（对方大睡时被直击），同样展示实体底牌！
+      else if (action.type === 'MAGIC_BOX_AUTO_HIT') {
+        const toast = document.getElementById('arena-toast');
+        const container = document.getElementById('revealed-card-container');
+        
+        toast.style.display = 'block';
+        isToastLocked = true;
+        
+        container.style.display = 'block';
+        container.innerHTML = `<div class="hs-card revealed-card-anim">${buildCardInnerHTML(action.tributeCard)}</div>`;
+        
+        toast.innerText = `💤 陷入昏睡无力抵抗！被魔术箱直击！`;
+        playHitReaction(targetEl, 20, true);
+        
+        setTimeout(() => { 
+          isToastLocked = false;
+          container.style.display = 'none';
+          container.innerHTML = '';
+          if (currentIsMyTurn) toast.innerText = `⚔️ 第 ${lastTurnNumber} 回合 · 你的回合`;
+          else toast.innerText = `🛡️ 第 ${lastTurnNumber} 回合 · 对手思考中`;
+        }, 2500);
+      }
+      // 🌟【爆牌惩罚视觉特效】
+      else if (action.type === 'CARD_BURNED') {
+        if (action.target === myPlayerId) {
+          const toast = document.getElementById('arena-toast');
+          toast.style.display = 'block';
+          toast.innerText = '🔥 手牌已达 5 张上限，抽到的牌被直接焚毁！';
+          toast.style.background = 'rgba(210, 0, 0, 0.9)'; // 刺眼的血红色
+          
+          playHitReaction(targetEl, 0, false, false); // 让英雄头像震动一下表示被烫到
+          
+          setTimeout(() => { 
+            toast.style.background = 'rgba(30, 18, 10, 0.9)'; // 恢复原色
+            if (!isToastLocked && currentIsMyTurn) toast.innerText = `⚔️ 第 ${lastTurnNumber} 回合 · 你的回合`;
+          }, 2500);
         }
       }
-      else if (action.type === 'WAKE_UP_DAMAGE') {
-        // 咬舌尖醒来的流血效果
-        const wokeEl = document.getElementById(action.target === myPlayerId ? 'my-hero' : 'enemy-hero');
-        playHitReaction(wokeEl, action.value);
-      }
     }
-
-    // ================= 原有状态刷新与游戏逻辑 =================
 
     function handleStateUpdate(state) {
       const isNewTurn = (state.turn !== lastTurnNumber);
       lastTurnNumber = state.turn;
       currentIsMyTurn = (state.currentTurnPlayerId === myPlayerId);
 
-      if (!currentIsMyTurn) {
-        document.getElementById('qte-modal').style.display = 'none';
-        if (qteAnimationId) cancelAnimationFrame(qteAnimationId);
-      }
-
-      if (!state.isCurrentPlayerSleeping || !currentIsMyTurn) stopSleepUI();
-      if (isNewTurn) {
-        startFloodCountdownUI(state.turnTimeLimit, currentIsMyTurn);
-        if (state.isCurrentPlayerSleeping) startSleepStruggleUI(currentIsMyTurn);
-      }
-
       const toast = document.getElementById('arena-toast');
       const endBtn = document.getElementById('end-turn-btn');
+
+      // 🌟【修复】：把等待玩家的 UI 逻辑加回来了！
+      if (state.state === 'WAITING') {
+        document.getElementById('box-guess-modal').style.display = 'none';
+        toast.style.display = 'block';
+        toast.innerText = '⏳ 匹配成功！等待第二个玩家加入...';
+        toast.style.background = 'rgba(30, 18, 10, 0.82)';
+        endBtn.disabled = true;
+        return; // 等待状态下，不渲染英雄和手牌
+      }
+
+      // 处理时停领域状态 (BOX_GUESSING)
+      if (state.state === 'BOX_GUESSING') {
+        endBtn.disabled = true;
+        if (state.boxData.defenderId === myPlayerId) {
+          toast.style.display = 'none';
+          document.getElementById('box-guess-modal').style.display = 'flex';
+        } else {
+          document.getElementById('box-guess-modal').style.display = 'none';
+          toast.style.display = 'block';
+          toast.innerText = `⏳ 绝对时停：等待对手猜花色...`;
+          toast.style.background = 'rgba(245, 127, 23, 0.9)';
+        }
+        return; 
+      } else {
+        document.getElementById('box-guess-modal').style.display = 'none';
+        toast.style.display = 'block';
+        toast.style.background = 'rgba(30, 18, 10, 0.82)';
+      }
+
+      if (isNewTurn) {
+        startFloodCountdownUI(state.turnTimeLimit, currentIsMyTurn);
+      }
+
       if (state.state === 'PLAYING') {
         if (currentIsMyTurn) {
-          toast.innerText = `⚔️ 第 ${state.turn} 回合 · 你的回合`;
+          if (!isToastLocked) toast.innerText = `⚔️ 第 ${state.turn} 回合 · 你的回合`;
           endBtn.innerText = '结束回合'; endBtn.className = 'turn-mine'; endBtn.disabled = false;
         } else {
-          toast.innerText = `🛡️ 第 ${state.turn} 回合 · 对手思考中`;
+          if (!isToastLocked) toast.innerText = `🛡️ 第 ${state.turn} 回合 · 对手思考中`;
           endBtn.innerText = '对手回合'; endBtn.className = 'turn-enemy'; endBtn.disabled = true;
         }
       }
@@ -398,18 +409,37 @@
       const me = state.players.find(p => p.id === myPlayerId);
       const enemy = state.players.find(p => p.id !== myPlayerId);
       if (me) {
-        currentMyMana = me.mana; updateHero('my', me);
+        currentMyMana = me.mana; 
+        myHandCards = me.hand; 
+        updateHero('my', me);
+        
         document.getElementById('mana-num').innerText = `${me.mana}/${me.maxMana}`;
-        for (let i = 1; i <= 3; i++) document.getElementById(`gem-${i}`).className = (i <= me.mana) ? 'mana-gem' : 'mana-gem empty';
+        
+        // 🌟 改为 1 到 5 颗水晶动态显隐与充能
+        for (let i = 1; i <= 5; i++) {
+          const gem = document.getElementById(`gem-${i}`);
+          if (gem) {
+            if (i <= me.maxMana) {
+              gem.style.display = 'block';
+              gem.className = (i <= me.mana) ? 'mana-gem' : 'mana-gem empty';
+            } else {
+              gem.style.display = 'none';
+            }
+          }
+        }
+        
         renderMyFanHand(me.hand, currentIsMyTurn, me.mana);
       }
+      
       if (enemy) {
         updateHero('enemy', enemy);
         const count = enemy.hand ? enemy.hand.length : 0;
-        const eHand = document.getElementById('enemy-hand'); eHand.innerHTML = '';
+        const eHand = document.getElementById('enemy-hand'); 
+        eHand.innerHTML = '';
         const mid = (count - 1) / 2;
         for (let i = 0; i < count; i++) {
-          const back = document.createElement('div'); back.className = 'enemy-card-back';
+          const back = document.createElement('div'); 
+          back.className = 'enemy-card-back';
           back.style.transform = `rotate(${(i - mid) * -6}deg) translateY(${Math.abs(i - mid) * 3}px)`;
           eHand.appendChild(back);
         }
@@ -426,48 +456,72 @@
       document.getElementById(`${prefix}-hp`).innerText = player.hp;
       let debuffs = '';
       if (player.nextTurnFlooded) debuffs += `<div class="debuff-pill pill-flood">🌊 限${player.nextTurnFlooded}秒</div>`;
-      if (player.nextTurnSleep) debuffs += `<div class="debuff-pill pill-sleep">💤 将被催眠</div>`;
+      if (player.isStunned) debuffs += `<div class="debuff-pill pill-stunned">💫 深度眩晕中</div>`;
+      else if (player.nextTurnSkip) debuffs += `<div class="debuff-pill pill-stunned">⏭️ 下回合跳过</div>`;
       document.getElementById(`${prefix}-debuffs`).innerHTML = debuffs;
     }
 
     function buildCardInnerHTML(card) {
       let art = 'art-damage', icon = '🔥', desc = `造成 <b>${card.effect.value}</b> 点火焰伤害。`;
-      if (card.effect.type === 'BLACK_FLASH') { art = 'art-black-flash'; icon = '⚡'; desc = `<b>空间QTE：</b>命中红区造成 <b>${card.effect.value}</b> 点暴击伤害！`; }
+      if (card.effect.type === 'BLACK_FLASH') { art = 'art-black-flash'; icon = '⚡'; desc = `<b>空间QTE：</b>命中红区暴击 <b>${card.effect.value}</b> 点！`; }
       else if (card.effect.type === 'FLOOD') { art = 'art-flood'; icon = '🌊'; desc = `使对手下回合出牌时间缩短至 <b>${card.effect.value}秒</b>。`; }
-      else if (card.effect.type === 'SLEEP') { art = 'art-sleep'; icon = '💤'; desc = `催眠敌方。未在5秒狂按25次则<b>跳过回合</b>(强醒-${card.effect.value}血)。`; }
-      return `<div class="card-cost-gem">${card.cost}</div><div class="card-portrait ${art}">${icon}</div><div class="card-ribbon">${card.name}</div><div class="card-text-box"><span>${desc}</span></div>`;
+      else if (card.effect.type === 'SLEEP') { art = 'art-sleep'; icon = '💤'; desc = `<b>即时发动！</b>未在5秒狂按25次陷入眩晕跳过回合。`; }
+      else if (card.effect.type === 'MAGIC_BOX') { art = 'art-magic-box'; icon = '🎁'; desc = `消耗一张暗牌。对方猜错炸20血，猜中反杀你20血！(大睡必中)`; }
+      
+      let suitColor = (card.suit === '♥️' || card.suit === '♦️') ? '#ff1744' : '#111';
+      let suitShadow = (card.suit === '♥️' || card.suit === '♦️') ? '0 0 10px rgba(255,23,68,0.6)' : 'none';
+
+      return `
+        <div class="card-cost-gem">${card.cost}</div>
+        <div class="card-suit-badge" style="color: ${suitColor}; text-shadow: ${suitShadow}">${card.suit || '?'}</div>
+        <div class="card-portrait ${art}">${icon}</div>
+        <div class="card-ribbon">${card.name}</div>
+        <div class="card-text-box"><span>${desc}</span></div>
+      `;
     }
 
     function renderMyFanHand(hand, isMyTurn, currentMana) {
       const myHandDiv = document.getElementById('my-hand'); myHandDiv.innerHTML = '';
-      const preview = document.getElementById('hover-preview'); preview.style.display = 'none';
-      if (!hand || hand.length === 0) return;
+      if (!hand || hand.length === 0) { cancelTributePick(); return; }
+      
+      if (isPickingTribute) myHandDiv.className = 'picking-tribute';
+      else myHandDiv.className = '';
+
       const mid = (hand.length - 1) / 2;
       hand.forEach((card, index) => {
         const cardEl = document.createElement('div');
-        cardEl.className = `hs-card ${(isMyTurn && currentMana >= card.cost) ? 'playable' : 'unplayable'}`;
+        
+        if (isPickingTribute) {
+          // 🌟【修复】：给原牌挂上 cancel-target 类，让它能被点中
+          cardEl.className = `hs-card ${card.id !== magicBoxCardId ? 'selectable' : 'cancel-target'}`;
+        }else {
+          cardEl.className = `hs-card ${(isMyTurn && currentMana >= card.cost) ? 'playable' : 'unplayable'}`;
+        }
+
         cardEl.style.transform = `rotate(${(index - mid) * 5.5}deg) translateY(${Math.abs(index - mid) * 6}px)`;
         cardEl.style.zIndex = 40 + index;
         cardEl.innerHTML = buildCardInnerHTML(card);
-        cardEl.onmouseenter = () => { preview.innerHTML = `<div class="hs-card">${buildCardInnerHTML(card)}</div>`; preview.style.display = 'block'; };
-        cardEl.onmouseleave = () => { preview.style.display = 'none'; };
-        cardEl.onclick = () => { preview.style.display = 'none'; handleCardClick(card); };
+        
+        cardEl.onclick = () => { handleCardClick(card); };
         myHandDiv.appendChild(cardEl);
       });
     }
 
-    function startSleepStruggleUI(isMyTurn) {
-      stopSleepUI();
-      if (isMyTurn) {
-        struggleClicks = 0; document.getElementById('struggle-count').innerText = 0;
-        document.getElementById('sleep-overlay').style.display = 'flex';
-        let remaining = 5.0; document.getElementById('sleep-countdown').innerText = '5.0';
-        sleepIntervalId = setInterval(() => {
-          remaining -= 0.1;
-          if (remaining <= 0) { remaining = 0; stopSleepUI(); }
-          document.getElementById('sleep-countdown').innerText = remaining.toFixed(1);
-        }, 100);
-      }
+    // 🌟 魔术箱猜花色发送
+    function submitBoxGuess(suit) {
+      document.getElementById('box-guess-modal').style.display = 'none';
+      ws.send(JSON.stringify({ type: 'PLAY_CARD', payload: { action: 'GUESS_BOX', suit: suit } }));
+    }
+
+    function startSleepStruggleUI() {
+      struggleClicks = 0; document.getElementById('struggle-count').innerText = 0;
+      document.getElementById('sleep-overlay').style.display = 'flex';
+      let remaining = 5.0; document.getElementById('sleep-countdown').innerText = '5.0';
+      sleepIntervalId = setInterval(() => {
+        remaining -= 0.1;
+        if (remaining <= 0) { remaining = 0; stopSleepUI(); }
+        document.getElementById('sleep-countdown').innerText = remaining.toFixed(1);
+      }, 100);
     }
     function stopSleepUI() { if (sleepIntervalId) clearInterval(sleepIntervalId); document.getElementById('sleep-overlay').style.display = 'none'; }
     function handleStruggleClick() {
@@ -488,8 +542,33 @@
       }
     }
 
+    function cancelTributePick() {
+      isPickingTribute = false; magicBoxCardId = null;
+      document.getElementById('arena-toast').innerText = `⚔️ 第 ${lastTurnNumber} 回合 · 你的回合`;
+      renderMyFanHand(myHandCards, currentIsMyTurn, currentMyMana);
+    }
+
     function handleCardClick(card) {
-      if (!currentIsMyTurn || currentMyMana < card.cost) return;
+      if (!currentIsMyTurn) return;
+
+      // 🌟 如果正在挑暗牌，处理双击逻辑
+      if (isPickingTribute) {
+        if (card.id === magicBoxCardId) { cancelTributePick(); return; } // 取消
+        ws.send(JSON.stringify({ type: 'PLAY_CARD', payload: { cardId: magicBoxCardId, tributeId: card.id } }));
+        cancelTributePick();
+        return;
+      }
+
+      if (currentMyMana < card.cost) return;
+
+      if (card.effect.type === 'MAGIC_BOX') {
+        if (myHandCards.length < 2) { log("需要手里至少有2张牌才能藏暗牌！"); return; }
+        isPickingTribute = true; magicBoxCardId = card.id;
+        document.getElementById('arena-toast').innerText = `🔒 请点击另外一张牌作为祭品暗牌！(点击原牌取消)`;
+        renderMyFanHand(myHandCards, currentIsMyTurn, currentMyMana);
+        return;
+      }
+      
       if (card.effect.type === 'BLACK_FLASH') {
         pendingCardId = card.id; document.getElementById('qte-modal').style.display = 'block'; pointerPos = 0; direction = 1;
         if (qteAnimationId) cancelAnimationFrame(qteAnimationId);
@@ -512,8 +591,7 @@
     }
 
     function endTurn() {
-      document.getElementById('qte-modal').style.display = 'none'; document.getElementById('water-overlay').style.display = 'none';
-      stopSleepUI(); clearInterval(floodIntervalId); cancelAnimationFrame(qteAnimationId);
+      cancelTributePick(); document.getElementById('qte-modal').style.display = 'none';
       ws.send(JSON.stringify({ type: 'END_TURN' }));
     }
   </script>
