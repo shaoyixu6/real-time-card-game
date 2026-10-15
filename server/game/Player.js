@@ -3,11 +3,23 @@
 const SUITS = ['♠️', '♥️', '♣️', '♦️'];
 
 const CARD_POOL = [
-  { weight: 40, template: { name: '炎弹', cost: 1, effect: { type: 'DAMAGE', value: 5 } } },
-  { weight: 20, template: { name: '黑闪', cost: 2, effect: { type: 'BLACK_FLASH', value: 25 } } },
-  { weight: 15, template: { name: '魔术箱', cost: 2, effect: { type: 'MAGIC_BOX', value: 20 } } }, // 🌟 修复：魔术箱改为 2 费
-  { weight: 15, template: { name: '大水', cost: 2, effect: { type: 'FLOOD', value: 6 } } },
-  { weight: 10, template: { name: '大睡', cost: 2, effect: { type: 'SLEEP', value: 8 } } }
+  // 45% 基础牌：保证每回合有费能打，且有充足的低费牌作为魔术箱的祭品
+  { weight: 45, template: { name: '炎弹', cost: 1, effect: { type: 'DAMAGE', value: 5 } } },
+  
+  // 15% 强攻牌：QTE爆发
+  { weight: 15, template: { name: '黑闪', cost: 2, effect: { type: 'BLACK_FLASH', value: 25 } } },
+  
+  // 12% 软控牌：限制对方时间
+  { weight: 12, template: { name: '大水', cost: 2, effect: { type: 'FLOOD', value: 6 } } },
+  
+  // 10% 硬控牌：大睡是极强的连招起手，必须稀有
+  { weight: 10, template: { name: '大睡', cost: 2, effect: { type: 'SLEEP', value: 8 } } },
+  
+  // 10% 脏牌：蛊毒能直接卡死对面2个手牌槽，极为致命，所以不能太常见
+  { weight: 10, template: { name: '蛊毒', cost: 2, effect: { type: 'POISON' } } },
+  
+  // 8% 终极心理战：魔术箱改为最稀有，抽到就是一次改变战局的豪赌，同时也防止卡手
+  { weight: 8,  template: { name: '魔术箱', cost: 2, effect: { type: 'MAGIC_BOX', value: 20 } } }
 ];
 
 function getRandomCardTemplate() {

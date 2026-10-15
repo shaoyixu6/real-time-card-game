@@ -31,6 +31,29 @@ const EFFECT_HANDLERS = {
     }, 5000);
   },
 
+  // 🌟【蛊毒】：循环塞入 2 张，严格判断 < 5 张上限
+  'POISON': (attacker, defender, effect, payload, room) => {
+    let dudsAdded = 0;
+    for (let i = 0; i < 2; i++) {
+      if (defender.hand.length < 5) { // 检查如果没满5张，才塞进去
+        defender.hand.push({
+          id: Math.random().toString(36).substring(2, 9),
+          name: '废牌',
+          cost: 2, // 🌟 标价 2 费
+          effect: { type: 'DUD', description: '无效果' },
+          suit: '☠️' // 独特的死灵花色
+        });
+        dudsAdded++;
+      }
+    }
+    if (room.onAction) room.onAction({ type: 'POISON_HIT', target: defender.id, count: dudsAdded });
+  },
+
+  // 🌟【废牌结算】：花 2 费打出后，除了通知前端播报，无任何实质伤害或效果
+  'DUD': (attacker, defender, effect, payload, room) => {
+    if (room.onAction) room.onAction({ type: 'DUD_DISCARDED', attacker: attacker.id });
+  },
+
   'MAGIC_BOX': (attacker, defender, effect, payload, room) => {
     if (defender.isSleeping || defender.isStunned) {
       defender.takeDamage(effect.value);
@@ -49,6 +72,7 @@ const EFFECT_HANDLERS = {
       }, 6000)
     };
   }
+  
 };
 
 class Room {
@@ -110,6 +134,8 @@ class Room {
     const card = attacker.hand.find(c => c.id === payload.cardId);
     if (!card || attacker.mana < card.cost) return false;
 
+    if (card.effect.type === 'DUD') return false;
+    
     if (card.effect.type === 'MAGIC_BOX') {
       const tributeCard = attacker.hand.find(c => c.id === payload.tributeId);
       if (!tributeCard || tributeCard.id === card.id) return false;
