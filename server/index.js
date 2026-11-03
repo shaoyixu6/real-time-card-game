@@ -44,7 +44,8 @@ wss.on('connection', (ws) => {
   clients.set(playerId, ws);
   ws.send(JSON.stringify({ type: 'SYSTEM', message: `Welcome ${player.name}! You joined ${room.roomId}` }));
 
-  if (room.state === 'PLAYING') broadcastRoomState(room);
+ // 无论 WAITING 还是 PLAYING 都广播一次状态，让 p1 立刻看到“等待第二个玩家加入...”
+  broadcastRoomState(room);
 
   ws.on('message', (rawMessage) => {
     try {

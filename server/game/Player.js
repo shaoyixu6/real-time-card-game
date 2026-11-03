@@ -3,23 +3,26 @@
 const SUITS = ['♠️', '♥️', '♣️', '♦️'];
 
 const CARD_POOL = [
-  // 45% 基础牌：保证每回合有费能打，且有充足的低费牌作为魔术箱的祭品
-  { weight: 45, template: { name: '炎弹', cost: 1, effect: { type: 'DAMAGE', value: 5 } } },
+  // 40% 基础牌：保证每回合有费能打，且有充足的低费牌作为魔术箱的祭品
+  { weight: 40, template: { name: '炎弹', cost: 1, effect: { type: 'DAMAGE', value: 5 } } },
   
-  // 15% 强攻牌：QTE爆发
-  { weight: 15, template: { name: '黑闪', cost: 2, effect: { type: 'BLACK_FLASH', value: 25 } } },
+  // 14% 强攻牌：QTE爆发
+  { weight: 14, template: { name: '黑闪', cost: 2, effect: { type: 'BLACK_FLASH', value: 25 } } },
   
-  // 12% 软控牌：限制对方时间
-  { weight: 12, template: { name: '大水', cost: 2, effect: { type: 'FLOOD', value: 6 } } },
+  // 11% 软控牌：限制对方时间
+  { weight: 11, template: { name: '大水', cost: 2, effect: { type: 'FLOOD', value: 6 } } },
   
   // 10% 硬控牌：大睡是极强的连招起手，必须稀有
   { weight: 10, template: { name: '大睡', cost: 2, effect: { type: 'SLEEP', value: 8 } } },
   
-  // 10% 脏牌：蛊毒能直接卡死对面2个手牌槽，极为致命，所以不能太常见
-  { weight: 10, template: { name: '蛊毒', cost: 2, effect: { type: 'POISON' } } },
+  // 9% 脏牌：蛊毒能直接卡死对面2个手牌槽
+  { weight: 9,  template: { name: '蛊毒', cost: 2, effect: { type: 'POISON' } } },
   
-  // 8% 终极心理战：魔术箱改为最稀有，抽到就是一次改变战局的豪赌，同时也防止卡手
-  { weight: 8,  template: { name: '魔术箱', cost: 2, effect: { type: 'MAGIC_BOX', value: 20 } } }
+  // 8% 终极心理战：魔术箱
+  { weight: 8,  template: { name: '魔术箱', cost: 2, effect: { type: 'MAGIC_BOX', value: 20 } } },
+
+  // 🌟 8% 新增【生死判官】：黑箱盲狙对手手牌花色，零信息泄露！
+  { weight: 8,  template: { name: '生死判官', cost: 2, effect: { type: 'JUDGE', value: 25, selfDmg: 10 } } }
 ];
 
 function getRandomCardTemplate() {
@@ -45,6 +48,10 @@ class Player {
     this.nextTurnSkip = false; 
     this.isSleeping = false;   
     this.isStunned = false;    
+    // 🌟【新增】：花色连击系统状态
+    this.streakSuit = null;      // 当前连击的花色
+    this.streakCount = 0;        // 连击次数 (0~3)
+    this.nextAttackDouble = false; // 黑桃专属 Buff：下次攻击伤害翻倍
   }
 
   takeDamage(amount) {
