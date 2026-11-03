@@ -3,7 +3,8 @@ const WebSocket = require('ws');
 const Room = require('./game/Room');
 const Player = require('./game/Player');
 
-const wss = new WebSocket.Server({ port: 8080 });
+const PORT = process.env.PORT || 8080;
+const wss = new WebSocket.Server({ port: PORT });
 
 // 👈 传给 Room 两个回调：一个刷新状态，一个广播动画动作！
 const room = new Room(
@@ -72,4 +73,4 @@ wss.on('connection', (ws) => {
   });
 });
 
-console.log('WebSocket Server is running on ws://localhost:8080');
+console.log(`WebSocket Server is running on port ${PORT}`);
